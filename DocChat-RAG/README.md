@@ -77,7 +77,7 @@ Most RAG tutorials show you **one** retrieval method. This project implements **
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/DocChat-RAG.git
+git clone https://github.com/taher51-lang/DocChat-RAG.git
 cd DocChat-RAG
 
 # Create virtual environment
@@ -193,10 +193,6 @@ DocChat-RAG/
 
 ---
 
-## 📝 License
 
-MIT
-
----
 
 **Built with ☕ and curiosity.**
