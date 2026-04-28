@@ -1,2 +1,9 @@
 .env
-chromaDB
+chromaDB/
+chromadb/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+*.pdf
+DocChat-RAG/.env
