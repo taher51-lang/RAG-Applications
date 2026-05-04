@@ -16,7 +16,7 @@ import tempfile
 import os
 
 # LangChain core
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader,PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -99,7 +99,7 @@ def process_pdf(tmp_path: str, session_id: str):
     try:
         sessions[session_id]["status"] = "processing"
 
-        loader = PyPDFLoader(tmp_path)
+        loader = PyMuPDFLoader(tmp_path)
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=100
