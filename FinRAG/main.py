@@ -2,6 +2,10 @@ import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from langchain_community.embeddings import HuggingFaceEmbeddings
+import os
 
 load_dotenv()
 import pdfplumber
@@ -16,6 +20,7 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
+from langchain_groq import ChatGroq
 
 # Models
 import chromadb
@@ -306,11 +311,11 @@ class NyayaSetu:
         
         # 4. Initialize ML Models (Cross Encoder & Generative LLM)
         self.cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            google_api_key=os.environ.get("GOOGLE_API_KEY")
-        )
-        
+
+        self.llm = ChatGroq(
+        model="llama-3.3-70b-versatile", 
+        temperature=0
+)
         # 5. Initialize the Sub-Components using Dependency Injection
         self.ingester = DocumentIngester(self.landmark_retriever, self.citing_retriever)
         self.retriever = NyayaSetuRetriever(
@@ -326,44 +331,44 @@ class NyayaSetu:
         return self.ingester.ingest_judgment(pdf_path, doc_type, doc_id, parent_id)
 
     def query(self, user_query):
-        """
-        Single entry point for frontend.
-        Returns a structured dictionary mapping the answer and conflict metadata.
-        """
-        # Step 1: Execute retrieval logic
+    # Step 1: Execute retrieval logic
         landmark_results, citing_results = self.retriever.nyayasetu_query(user_query)
-        
-        # Ensure we don't pass None values to detector
+    
         l_chunks = landmark_results if landmark_results else []
         c_chunks = citing_results if citing_results else []
-        
-        # Step 2: Detect conflicts and generate natural language answer
+    
+    # Step 2: Detect conflicts and generate natural language answer
         raw_answer = self.conflict_detector.detect_and_answer(user_query, l_chunks, c_chunks)
-        
-        # Step 3: Parse output to extract structured response
+    
+    # Step 3: Collect contexts for RAGAS
+        contexts = [c.page_content for c in l_chunks + c_chunks]
+    
+    # Step 4: Parse output to extract structured response
         landmark_case = l_chunks[0].metadata.get("case_name") if l_chunks else None
         citing_case = c_chunks[0].metadata.get("case_name") if c_chunks else None
-        
+    
         conflict_type = None
         conflict_detected = False
-        
-        # Simple extraction based on standard prompt terminology
-        if "OVERRULES" in raw_answer.upper():
-            conflict_type = "OVERRULES"
-            conflict_detected = True
-        elif "NARROWS" in raw_answer.upper():
-            conflict_type = "NARROWS"
-            conflict_detected = True
-        elif "AFFIRMS" in raw_answer.upper():
-            conflict_type = "AFFIRMS"
-        
+    
+    # Fixed conflict detection — regex instead of simple string search
+        import re
+        match = re.search(
+        r'\*{0,2}(?:Relationship|Classification)\*{0,2}[:\s]+([A-Z]+)',
+        raw_answer
+    )
+        if match:
+            conflict_type = match.group(1)
+            conflict_detected = conflict_type in ["OVERRULES", "NARROWS"]
+    
         return {
-            "answer": raw_answer,
-            "conflict_type": conflict_type,
-            "landmark_case": landmark_case,
-            "citing_case": citing_case,
-            "conflict_detected": conflict_detected
-        }
+        "answer": raw_answer,
+        "conflict_type": conflict_type,
+        "landmark_case": landmark_case,
+        "citing_case": citing_case,
+        "conflict_detected": conflict_detected,
+        "contexts": contexts
+    }
+
     def debug(self, query):
     # check landmark collection
         landmark_data = self.landmark_vectorstore.get()
@@ -393,11 +398,60 @@ class NyayaSetu:
     # Example usage
 if __name__ == "__main__":
     nyayasetu = NyayaSetu()
-    nyayasetu.ingest("Bangalore_water_supply_1978.pdf", "landmark", "Banglore_water_supply_1978")
-    nyayasetu.ingest("piyara_Singh.pdf", "landmark", "Piarasingh_Vs_State_Of_Punjab")
-    nyayasetu.ingest("Secretary_State_Of_Karnataka_And_vs_Umadevi.PDF", "citing", "Secretary_State_Of_Karnataka_And_vs_Umadevi")
-    response = nyayasetu.query("can contract workers claim permanent employment")
-    print(response)
-    nyayasetu.debug("can contract workers claim permanent employment")
-    nyayasetu.debug("can contract workers claim permanent employment")
+    # nyayasetu.ingest("Bangalore_water_supply_1978.pdf", "landmark", "Banglore_water_supply_1978")
+    # nyayasetu.ingest("piyara_Singh.pdf", "landmark", "Piarasingh_Vs_State_Of_Punjab")
+    # nyayasetu.ingest("Secretary_State_Of_Karnataka_And_vs_Umadevi.PDF", "citing", "Secretary_State_Of_Karnataka_And_vs_Umadevi")
+    # response = nyayasetu.query("can contract workers claim permanent employment")
+    # print(response)
+    # nyayasetu.debug("can contract workers claim permanent employment")
+    # nyayasetu.debug("can contract workers claim permanent employment")
+    eval_questions = [
+    {
+        "question": "Can contract workers claim permanent employment?",
+        "ground_truth": "Contract workers do not have a fundamental right to claim permanent employment as per Umadevi 2006 which narrowed the position established in Piara Singh 1992."
+    },
+    {
+        "question": "What is the definition of industry under Industrial Disputes Act?",
+        "ground_truth": "Industry means any business, trade, undertaking where capital and labour cooperate for production of goods or services as established in Bangalore Water Supply case 1978."
+    },
+    {
+        "question": "Do temporary employees have regularization rights?",
+        "ground_truth": "Temporary employees do not have automatic regularization rights. Umadevi 2006 held that initial appointment must follow proper selection process."
+    }
+    ]
+
+    from ragas import evaluate
+    from ragas.metrics import answer_relevancy, context_precision
+    from datasets import Dataset
+    ragas_llm = LangchainLLMWrapper(ChatGroq(
+        model="llama3-70b-8192",
+        api_key=os.getenv("GROQ_API_KEY")
+        ))
+
+# RAGAS Embeddings — reuse your existing embeddings
+    ragas_embeddings = LangchainEmbeddingsWrapper(
+        HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    )
+
+# collect results
+    results = []
+    for item in eval_questions:
+        response = nyayasetu.query(item["question"])
+        results.append({
+        "question": item["question"],
+        "answer": response["answer"],
+        "contexts": response["contexts"],
+        "ground_truth": item["ground_truth"]
+    })
+# convert to dataset
+        dataset = Dataset.from_list(results)
+# evaluate
+        scores = evaluate(
+            dataset,
+                metrics=[
+        answer_relevancy,
+        context_precision,
+            ]
+            )
+        print(scores)
 
