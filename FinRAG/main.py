@@ -423,35 +423,6 @@ if __name__ == "__main__":
     from ragas import evaluate
     from ragas.metrics import answer_relevancy, context_precision
     from datasets import Dataset
-    ragas_llm = LangchainLLMWrapper(ChatGroq(
-        model="llama3-70b-8192",
-        api_key=os.getenv("GROQ_API_KEY")
-        ))
 
 # RAGAS Embeddings — reuse your existing embeddings
-    ragas_embeddings = LangchainEmbeddingsWrapper(
-        HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    )
-
-# collect results
-    results = []
-    for item in eval_questions:
-        response = nyayasetu.query(item["question"])
-        results.append({
-        "question": item["question"],
-        "answer": response["answer"],
-        "contexts": response["contexts"],
-        "ground_truth": item["ground_truth"]
-    })
-# convert to dataset
-        dataset = Dataset.from_list(results)
-# evaluate
-        scores = evaluate(
-            dataset,
-                metrics=[
-        answer_relevancy,
-        context_precision,
-            ]
-            )
-        print(scores)
 
