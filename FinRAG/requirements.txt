@@ -26,3 +26,4 @@ langchain-pinecone>=0.2.0
 rank-bm25==0.2.2
 ragas>=0.1.0
 datasets>=2.15.0
+uvicorn
