@@ -12,7 +12,9 @@ pdfplumber==0.11.9
 chromadb==1.5.8
 sentence-transformers==5.4.1
 huggingface_hub==1.11.0
+pinecone
 pinecone-text
+upstash-redis
 
 # LangChain Ecosystem
 langchain-classic==1.0.4
