@@ -222,6 +222,3 @@ async def debug_pinecone():
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
 # ── Entry point ─────────────────────────────────────────────────────
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True)
