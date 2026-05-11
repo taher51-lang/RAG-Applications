@@ -2,14 +2,18 @@ import os
 import re
 from datetime import datetime
 from dotenv import load_dotenv
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
+from langchain_community.storage import UpstashRedisByteStore
+from upstash_redis import Redis
+# from ragas.llms import LangchainLLMWrapper
+# from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_community.embeddings import HuggingFaceEmbeddings
 import os
 
 load_dotenv()
+redis = Redis.from_env()
 import pdfplumber
 from langchain_classic.storage import LocalFileStore
+from langchain_pinecone import PineconeVectorStore
 from langchain_classic.storage._lc_store import create_kv_docstore
 # LangChain Imports
 from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
@@ -26,17 +30,22 @@ from langchain_groq import ChatGroq
 import chromadb
 from sentence_transformers import CrossEncoder
 
+from pinecone import Pinecone
+from pinecone_text.sparse import BM25Encoder
+from langchain_community.retrievers import PineconeHybridSearchRetriever
+
 # =====================================================================
 # Step 1: Document Ingester
 # Class responsibility: Handle the reading, metadata extraction, and
 # vector database ingestion for PDFs. Keeps IO and parsing logic isolated.
 # =====================================================================
 class DocumentIngester:
-    def __init__(self, landmark_retriever, citing_retriever):
-        # We inject the ParentDocumentRetrievers so the ingester knows
-        # where to push the parsed chunks without worrying about ChromaDB internals.
-        self.landmark_retriever = landmark_retriever
-        self.citing_retriever = citing_retriever
+    def __init__(self, landmark_hybrid, citing_hybrid, landmark_docstore, citing_docstore, child_splitter):
+        self.landmark_hybrid = landmark_hybrid
+        self.citing_hybrid = citing_hybrid
+        self.landmark_docstore = landmark_docstore
+        self.citing_docstore = citing_docstore
+        self.child_splitter = child_splitter
 
     def extract_text(self, pdf_path):
         """Extracts full raw text from a given PDF file."""
@@ -74,7 +83,7 @@ class DocumentIngester:
         if parent_id is None:
             parent_id = doc_id
         
-        document = Document(
+        parent_doc = Document(
             page_content=full_text,
             metadata={
                 "doc_id": doc_id,
@@ -89,13 +98,39 @@ class DocumentIngester:
             }
         )
         
-        # Route the document to the corresponding retriever
+        # Save parent to docstore
         if doc_type == "landmark":
-            self.landmark_retriever.add_documents([document])
-            print(f"Ingested landmark: {case_name} | {doc_id} | {date}")
+            # RIGHT: Passing the encoded content as bytes
+            self.landmark_docstore.mset([(doc_id, parent_doc.page_content.encode("utf-8"))])
+            hybrid_retriever = self.landmark_hybrid
+            print(f"Ingested landmark parent: {case_name} | {doc_id} | {date}")
         else:
-            self.citing_retriever.add_documents([document])
-            print(f"Ingested citing judgment: {case_name} | {doc_id} | {date}")
+            # The corrected line for your citing judgments
+            self.citing_docstore.mset([(doc_id, parent_doc.page_content.encode("utf-8"))])
+            hybrid_retriever = self.citing_hybrid
+            print(f"Ingested citing parent: {case_name} | {doc_id} | {date}")
+            
+        # Chunking
+        chunks = self.child_splitter.split_documents([parent_doc])
+        texts = []
+        metadatas = []
+        for chunk in chunks:
+            chunk.metadata['parent_id'] = doc_id
+            texts.append(chunk.page_content)
+            metadatas.append(chunk.metadata)
+            
+        # Add chunks to hybrid retriever
+        if texts:
+            # We determine the correct namespace string based on the doc_type
+            target_namespace = "landmark_judgments" if doc_type == "landmark" else "citing_judgments"
+            
+            # CRITICAL FIX: Pass the namespace explicitly here
+            hybrid_retriever.add_texts(
+                texts, 
+                metadatas=metadatas, 
+                namespace=target_namespace
+            )
+            print(f"✅ Ingested {len(texts)} chunks into namespace: {target_namespace}")
         
         return doc_id
 
@@ -106,10 +141,9 @@ class DocumentIngester:
 # mapping queries from citing judgments to landmark queries.
 # =====================================================================
 class NyayaSetuRetriever:
-    def __init__(self, landmark_vectorstore, citing_vectorstore, cross_encoder, llm):
-        # We store the vectorstores to fetch documents dynamically for BM25
-        self.landmark_vectorstore = landmark_vectorstore
-        self.citing_vectorstore = citing_vectorstore
+    def __init__(self, landmark_hybrid, citing_hybrid, cross_encoder, llm):
+        self.landmark_hybrid = landmark_hybrid
+        self.citing_hybrid = citing_hybrid
         self.cross_encoder = cross_encoder
         self.llm = llm
         
@@ -117,27 +151,9 @@ class NyayaSetuRetriever:
         self.relationship_registry = {
             "Secretary_State_Of_Karnataka_And_vs_Umadevi": [
                 "Piarasingh_Vs_State_Of_Punjab",
-                "Banglore_water_supply_1978"
+                "Bangalore_water_supply_1978"
             ]
         }
-        
-    def _get_hybrid_retriever(self, vectorstore):
-        """Helper to build a hybrid retriever dynamically combining BM25 and Vector search."""
-        all_data = vectorstore.get()
-        if not all_data['documents']:
-            return vectorstore.as_retriever(search_kwargs={"k": 20})
-            
-        docs = [
-            Document(page_content=text, metadata=meta)
-            for text, meta in zip(all_data['documents'], all_data['metadatas'])
-        ]
-        bm25_retriever = BM25Retriever.from_documents(docs, k=20)
-        vector_retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
-        
-        return EnsembleRetriever(
-            retrievers=[bm25_retriever, vector_retriever],
-            weights=[0.6, 0.4]
-        )
 
     def two_stage_retrieval(self, query, hybrid_retriever, k_final=5, return_scores=False):
         """Executes Stage 1 (Hybrid retrieval) and Stage 2 (Cross-Encoder Re-ranking)."""
@@ -180,17 +196,15 @@ class NyayaSetuRetriever:
         return response.content
 
     def nyayasetu_query(self, user_query):
-        citing_hybrid = self._get_hybrid_retriever(self.citing_vectorstore)
         citing_results, citing_scores = self.two_stage_retrieval(
-            user_query, citing_hybrid, k_final=5, return_scores=True
+            user_query, self.citing_hybrid, k_final=5, return_scores=True
         )
         
         RELEVANCE_THRESHOLD = 0.3
     
         # fallback 1 — citing not relevant enough
         if not citing_results or citing_scores[0] < RELEVANCE_THRESHOLD:
-            landmark_hybrid = self._get_hybrid_retriever(self.landmark_vectorstore)
-            landmark_results = self.two_stage_retrieval(user_query, landmark_hybrid, k_final=5)
+            landmark_results = self.two_stage_retrieval(user_query, self.landmark_hybrid, k_final=5)
             return landmark_results, None
         
         top_citing = citing_results[0]
@@ -199,23 +213,17 @@ class NyayaSetuRetriever:
     
         # fallback 2 — no registry mapping found
         if not landmark_doc_ids:
-            landmark_hybrid = self._get_hybrid_retriever(self.landmark_vectorstore)
-            landmark_results = self.two_stage_retrieval(user_query, landmark_hybrid, k_final=5)
+            landmark_results = self.two_stage_retrieval(user_query, self.landmark_hybrid, k_final=5)
             return landmark_results, None
         
         landmark_query = self.generate_landmark_query(user_query, top_citing.page_content)
         
-        landmark_results = self.landmark_vectorstore.similarity_search(
-            landmark_query,
-            k=5,
-            filter={"parent_id": landmark_doc_ids[0]}
-
-        )
+        # For Pinecone Hybrid Search, we get relevant parent documents
+        # and then filter them by parent_id. 
+        landmark_results = self.two_stage_retrieval(landmark_query, self.landmark_hybrid, k_final=10)
+        filtered_landmark_results = [doc for doc in landmark_results if doc.metadata.get("parent_id") in landmark_doc_ids]
         
-        print("DEBUG landmark_results:", landmark_results)
-        print("DEBUG citing_results:", citing_results)
-        
-        return landmark_results, citing_results
+        return filtered_landmark_results[:5], citing_results
 
 
 # =====================================================================
@@ -265,65 +273,69 @@ User question: {query}
 # =====================================================================
 class NyayaSetu:
     def __init__(self):
-        # 1. Initialize Embeddings & ChromaDB inside Orchestrator
+        # 1. Initialize Embeddings & Pinecone Vector Database
         self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        self.chroma_client = chromadb.PersistentClient(path="./nyayasetu_db")
-  
-
-# replace these two lines in __init__:
-
-# with these:
-        self.landmark_docstore = create_kv_docstore(
-            LocalFileStore("./nyayasetu_db/landmark_docstore")
-        )
-        self.citing_docstore = create_kv_docstore(
-            LocalFileStore("./nyayasetu_db/citing_docstore")
-        )
-        self.landmark_vectorstore = Chroma(
-            client=self.chroma_client,
-            collection_name="landmark_judgments",
-            embedding_function=self.embeddings
-        )
-        self.citing_vectorstore = Chroma(
-            client=self.chroma_client,
-            collection_name="citing_judgments",
-            embedding_function=self.embeddings
-        )
         
-        # 2. Splitters for chunking
-        parent_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2000, chunk_overlap=200, separators=["\n\n", "\n", ". ", " "]
+        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        index_name = "nyaya-setu"
+        index = pc.Index(index_name)
+        
+        # BM25 Encoder for sparse embeddings
+        self.bm25_encoder = BM25Encoder().default()
+        
+        self.landmark_docstore = UpstashRedisByteStore(
+            client=redis, 
+            ttl=None, 
+            namespace="landmark"
         )
+
+        self.citing_docstore = UpstashRedisByteStore(
+            client=redis, 
+            ttl=None, 
+            namespace="citing"
+        )
+
+        # 2. Splitters for chunking
         child_splitter = RecursiveCharacterTextSplitter(
             chunk_size=512, chunk_overlap=50, separators=["\n\n", "\n", ". ", " "]
         )
-        
-        # 3. Initialize ParentDocumentRetrievers
-        self.landmark_retriever = ParentDocumentRetriever(
-            vectorstore=self.landmark_vectorstore,
-            docstore=self.landmark_docstore,
-            child_splitter=child_splitter,
-            parent_splitter=parent_splitter
+
+        # 3. Initialize PineconeHybridSearchRetrievers
+        self.landmark_hybrid_retriever = PineconeHybridSearchRetriever(
+            embeddings=self.embeddings,
+            sparse_encoder=self.bm25_encoder,
+            index=index,
+            namespace="landmark_judgments",
+            top_k=20
         )
-        self.citing_retriever = ParentDocumentRetriever(
-            vectorstore=self.citing_vectorstore,
-            docstore=self.citing_docstore,
-            child_splitter=child_splitter,
-            parent_splitter=parent_splitter
+
+        self.citing_hybrid_retriever = PineconeHybridSearchRetriever(
+            embeddings=self.embeddings,
+            sparse_encoder=self.bm25_encoder,
+            index=index,
+            namespace="citing_judgments",
+            top_k=20
         )
         
         # 4. Initialize ML Models (Cross Encoder & Generative LLM)
         self.cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
 
         self.llm = ChatGroq(
-        model="llama-3.3-70b-versatile", 
-        temperature=0
-)
+            model="llama-3.3-70b-versatile", 
+            temperature=0
+        )
+        
         # 5. Initialize the Sub-Components using Dependency Injection
-        self.ingester = DocumentIngester(self.landmark_retriever, self.citing_retriever)
+        self.ingester = DocumentIngester(
+            self.landmark_hybrid_retriever, 
+            self.citing_hybrid_retriever, 
+            self.landmark_docstore, 
+            self.citing_docstore, 
+            child_splitter
+        )
         self.retriever = NyayaSetuRetriever(
-            self.landmark_vectorstore, 
-            self.citing_vectorstore,
+            self.landmark_hybrid_retriever, 
+            self.citing_hybrid_retriever,
             self.cross_encoder,
             self.llm
         )
@@ -371,17 +383,106 @@ class NyayaSetu:
         "conflict_detected": conflict_detected,
         "contexts": contexts
     }
+    def debug_query(self, user_query):
+        print("\n" + "🔍" + "="*50)
+        print(f"DEBUGGING QUERY: {user_query}")
+        
+        # 1. Test Citing Retrieval
+        c_results, c_scores = self.retriever.two_stage_retrieval(
+            user_query, self.citing_hybrid_retriever, k_final=5, return_scores=True
+        )
+        
+        if not c_results:
+            print("❌ No Citing chunks found.")
+            return
 
+        top_c = c_results[0]
+        c_id = top_c.metadata.get('parent_id')
+        print(f"✅ Top Citing ID: {c_id} (Score: {c_scores[0]:.4f})")
+
+        # 2. Check Registry
+        landmark_ids = self.retriever.relationship_registry.get(c_id)
+        print(f"🔗 Registry Match: {landmark_ids}")
+
+        if not landmark_ids:
+            print("❌ No landmark mapping found for this Citing ID in relationship_registry.")
+            return
+
+        # 3. Test Landmark Retrieval BEFORE filtering
+        l_query = self.retriever.generate_landmark_query(user_query, top_c.page_content)
+        print(f"📝 Generated Landmark Query: {l_query[:100]}...")
+        
+        l_raw, l_scores = self.retriever.two_stage_retrieval(
+            l_query, self.landmark_hybrid_retriever, k_final=10, return_scores=True
+        )
+
+        print(f"\n--- [LANDMARK SEARCH RESULTS (TOP 10)] ---")
+        found_target = False
+        for i, (doc, score) in enumerate(zip(l_raw, l_scores)):
+            p_id = doc.metadata.get('parent_id')
+            status = "🎯 MATCH" if p_id in landmark_ids else "❌ WRONG ID"
+            if p_id in landmark_ids: found_target = True
+            print(f"[{i+1}] Score: {score:.4f} | ID: {p_id} | {status}")
+        
+        if not found_target:
+            print("\n🚨 ISSUE: The landmark you want exists, but didn't rank high enough in the top 10.")
+    def debug_retrieval(self, query):
+        print("\n" + "="*50)
+        print(f"🔍 DEBUGGING RETRIEVAL FOR: '{query}'")
+        print("="*50)
+
+        # 1. Check Redis Docstores
+        l_keys = list(self.landmark_docstore.yield_keys())
+        c_keys = list(self.citing_docstore.yield_keys())
+        print(f"📡 Redis Status: {len(l_keys)} Landmarks, {len(c_keys)} Citing docs stored.")
+
+        # 2. Test Citing Retrieval (Stage 1 & 2)
+        print("\n--- [STEP 1: CITING RETRIEVAL] ---")
+        citing_results, citing_scores = self.retriever.two_stage_retrieval(
+            query, self.citing_hybrid_retriever, k_final=3, return_scores=True
+        )
+
+        if not citing_results:
+            print("❌ No Citing chunks found in Pinecone!")
+        else:
+            for i, (doc, score) in enumerate(zip(citing_results, citing_scores)):
+                p_id = doc.metadata.get('parent_id', 'N/A')
+                print(f"[{i+1}] Score: {score:.4f} | Parent: {p_id}")
+                print(f"    Snippet: {doc.page_content[:150]}...")
+
+        # 3. Test Landmark Retrieval
+        print("\n--- [STEP 2: LANDMARK RETRIEVAL] ---")
+        # Let's see if the specific mapping for the top citing result exists
+        if citing_results:
+            top_p_id = citing_results[0].metadata.get('parent_id')
+            mapping = self.retriever.relationship_registry.get(top_p_id)
+            print(f"🔗 Registry lookup for '{top_p_id}': {mapping}")
+            
+            # Generate the specific landmark query the LLM uses
+            l_query = self.retriever.generate_landmark_query(query, citing_results[0].page_content)
+            print(f"📝 Generated Landmark Query: {l_query[:100]}...")
+            
+            l_results, l_scores = self.retriever.two_stage_retrieval(
+                l_query, self.landmark_hybrid_retriever, k_final=3, return_scores=True
+            )
+            
+            if not l_results:
+                print("❌ No Landmark chunks found in Pinecone!")
+            else:
+                for i, (doc, score) in enumerate(zip(l_results, l_scores)):
+                    p_id = doc.metadata.get('parent_id', 'N/A')
+                    # Check if this ID is in our allowed registry
+                    allowed = "✅ (MATCH)" if (mapping and p_id in mapping) else "⚠️ (NO MATCH)"
+                    print(f"[{i+1}] Score: {score:.4f} | Parent: {p_id} {allowed}")
+                    print(f"    Snippet: {doc.page_content[:150]}...")
     def debug(self, query):
     # check landmark collection
-        landmark_data = self.landmark_vectorstore.get()
-        landmark_parent_ids = set(m['parent_id'] for m in landmark_data['metadatas'])
-        print("LANDMARK parent_ids:", landmark_parent_ids)
+        keys = list(self.landmark_docstore.yield_keys())
+        print("LANDMARK keys in docstore:", keys)
     
     # check citing collection
-        citing_data = self.citing_vectorstore.get()
-        citing_parent_ids = set(m['parent_id'] for m in citing_data['metadatas'])
-        print("CITING parent_ids:", citing_parent_ids)
+        keys = list(self.citing_docstore.yield_keys())
+        print("CITING keys in docstore:", keys)
     
     # check retrieval
         citing_hybrid = self.retriever._get_hybrid_retriever(self.citing_vectorstore)
@@ -399,6 +500,7 @@ class NyayaSetu:
             print("No citing results found")
 
     # Example usage
+
 if __name__ == "__main__":
     nyayasetu = NyayaSetu()
     # nyayasetu.ingest("Bangalore_water_supply_1978.pdf", "landmark", "Banglore_water_supply_1978")
@@ -408,7 +510,23 @@ if __name__ == "__main__":
     # print(response)
     # nyayasetu.debug("can contract workers claim permanent employment")
     # nyayasetu.debug("can contract workers claim permanent employment")
-    eval_questions = [
+    print("Checking system readiness...")
+    
+    # 2. Run the Debug Query
+    test_query = "Can contract workers claim permanent employment?"
+    # nyayasetu.debug_retrieval(test_query)
+    nyayasetu.debug_query(test_query)
+    # # 3. Run the Full Pipeline Query
+    # print("\n" + "="*50)
+    # print("🚀 RUNNING FULL ANALYSIS")
+    # print("="*50)
+    # final_response = nyayasetu.query(test_query)
+    
+    # print(f"\nFinal Classification: {final_response['conflict_type']}")
+    # print(f"Landmark Case used: {final_response['landmark_case']}")
+    # print(f"Citing Case used: {final_response['citing_case']}")
+    # print(f"\nAnswer excerpt: {final_response['answer'][:500]}...")
+    # eval_questions = [
     {
         "question": "Can contract workers claim permanent employment?",
         "ground_truth": "Contract workers do not have a fundamental right to claim permanent employment as per Umadevi 2006 which narrowed the position established in Piara Singh 1992."
@@ -421,10 +539,10 @@ if __name__ == "__main__":
         "question": "Do temporary employees have regularization rights?",
         "ground_truth": "Temporary employees do not have automatic regularization rights. Umadevi 2006 held that initial appointment must follow proper selection process."
     }
-    ]
+    
 
-    from ragas import evaluate
-    from ragas.metrics import answer_relevancy, context_precision
+    # from ragas import evaluate
+    # from ragas.metrics import answer_relevancy, context_precision
     from datasets import Dataset
 
 # RAGAS Embeddings — reuse your existing embeddings

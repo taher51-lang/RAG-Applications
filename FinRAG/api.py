@@ -145,36 +145,38 @@ async def get_documents():
     
     # Get Landmark documents
     try:
-        landmark_data = nyayasetu_instance.landmark_vectorstore.get()
-        if landmark_data and 'metadatas' in landmark_data:
-            for meta in landmark_data['metadatas']:
-                if meta and meta.get('doc_id'):
-                    doc = {
-                        "doc_id": meta.get('doc_id'),
-                        "doc_type": "landmark",
-                        "case_name": meta.get('case_name', 'Unknown'),
-                        "date": meta.get('date', 'Unknown')
-                    }
-                    if doc not in documents:
-                        documents.append(doc)
+        keys = list(nyayasetu_instance.landmark_docstore.yield_keys())
+        docs = nyayasetu_instance.landmark_docstore.mget(keys)
+        for doc in docs:
+            if doc and hasattr(doc, 'metadata'):
+                meta = doc.metadata
+                doc_item = {
+                    "doc_id": meta.get('doc_id'),
+                    "doc_type": "landmark",
+                    "case_name": meta.get('case_name', 'Unknown'),
+                    "date": meta.get('date', 'Unknown')
+                }
+                if doc_item not in documents:
+                    documents.append(doc_item)
     except Exception as e:
         print(f"Error fetching landmark docs: {e}")
         
     # Get Citing documents
     try:
-        citing_data = nyayasetu_instance.citing_vectorstore.get()
-        if citing_data and 'metadatas' in citing_data:
-            for meta in citing_data['metadatas']:
-                if meta and meta.get('doc_id'):
-                    doc = {
-                        "doc_id": meta.get('doc_id'),
-                        "parent_id": meta.get('parent_id'),
-                        "doc_type": "citing",
-                        "case_name": meta.get('case_name', 'Unknown'),
-                        "date": meta.get('date', 'Unknown')
-                    }
-                    if doc not in documents:
-                        documents.append(doc)
+        keys = list(nyayasetu_instance.citing_docstore.yield_keys())
+        docs = nyayasetu_instance.citing_docstore.mget(keys)
+        for doc in docs:
+            if doc and hasattr(doc, 'metadata'):
+                meta = doc.metadata
+                doc_item = {
+                    "doc_id": meta.get('doc_id'),
+                    "parent_id": meta.get('parent_id'),
+                    "doc_type": "citing",
+                    "case_name": meta.get('case_name', 'Unknown'),
+                    "date": meta.get('date', 'Unknown')
+                }
+                if doc_item not in documents:
+                    documents.append(doc_item)
     except Exception as e:
         print(f"Error fetching citing docs: {e}")
         
@@ -192,7 +194,33 @@ if os.path.isdir(FRONTEND_DIR):
     async def serve_frontend():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
+@app.get("/debug/pinecone")
+async def debug_pinecone():
+    """Directly inspect the Pinecone index stats and namespaces."""
+    if not nyayasetu_instance:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
 
+    try:
+        # Access the underlying index from one of your retrievers
+        # Note: adjust 'landmark_retriever' to whatever your attribute name is in main.py
+        index = nyayasetu_instance.landmark_hybrid_retriever.index
+        
+        # 1. Check overall index stats (Total count, namespaces, etc.)
+        stats = index.describe_index_stats()
+        
+        # 2. Try a manual "dummy" fetch of 1 vector to see metadata structure
+        # We search with a blank vector or just check the namespaces
+        namespaces = stats.get('namespaces', {})
+        
+        return {
+            "index_name": "nyayasetu-index",
+            "total_vector_count": stats.get('total_vector_count'),
+            "namespaces_found": list(namespaces.keys()),
+            "stats_detail": stats.to_dict(),
+            "suggestion": "If total_vector_count is 0, ingestion failed. If namespaces don't match your queries, that's why chunks aren't returning."
+        }
+    except Exception as e:
+        return {"error": str(e), "traceback": traceback.format_exc()}
 # ── Entry point ─────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
