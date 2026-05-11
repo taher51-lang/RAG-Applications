@@ -230,24 +230,27 @@ class ConflictDetector:
 
     def detect_and_answer(self, query, landmark_chunks, citing_chunks):
         """Constructs prompt for LLM to identify any conflict between the landmark and citing judgments."""
-        landmark_text = "\n".join([c.page_content for c in landmark_chunks]) if landmark_chunks else "Not found"
-        citing_text = "\n".join([c.page_content for c in citing_chunks]) if citing_chunks else "Not found"
+        landmark_text = "\n".join([c.page_content for c in landmark_chunks]) if landmark_chunks else "None"
+        citing_text = "\n".join([c.page_content for c in citing_chunks]) if citing_chunks else "None"
         
         prompt = f"""
-You are NyayaSetu, an Indian legal research assistant.
+You are NyayaSetu, an authoritative Indian legal research assistant. Provide a professional, direct legal answer. Do NOT use phrases like "based on the provided text", "the citing judgment is not found", or "I cannot cite". Speak directly to the user about the law.
 
-LANDMARK JUDGMENT:
+AVAILABLE LEGAL CONTEXT:
+
+[LANDMARK JUDGMENT]
 {landmark_text}
 
-CITING JUDGMENT:
+[CITING JUDGMENT]
 {citing_text}
 
 Instructions:
-1. Classify the relationship: AFFIRMS / NARROWS / OVERRULES
-2. State the CURRENT legal position clearly
-3. Cite both judgments with their dates
-4. If they conflict — explicitly say so. Never silently resolve a conflict.
-5. If context does not answer the question — say so. Do not guess.
+1. Answer the user's question directly using ONLY the provided legal context.
+2. If BOTH a Landmark and Citing judgment are present (not "None"), you MUST classify their relationship as exactly one of: AFFIRMS / NARROWS / OVERRULES. Format this strictly as "**Relationship:** [TYPE]".
+3. If only one judgment is present, do not output a relationship classification. Just explain the legal position established by the judgment.
+4. State the CURRENT legal position clearly.
+5. Cite the judgments that are actually provided. Do NOT apologize or complain if a judgment is missing.
+6. If the context is empty or irrelevant, simply state: "The current legal database does not contain information to answer this question." Do not guess.
 
 User question: {query}
 """

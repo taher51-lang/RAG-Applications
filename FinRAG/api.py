@@ -13,7 +13,7 @@ import os
 import traceback
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -106,6 +106,81 @@ async def ingest(request: IngestRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
+@app.post("/ingest_upload")
+async def ingest_upload(
+    file: UploadFile = File(...),
+    doc_type: str = Form(...),
+    doc_id: str = Form(...),
+    parent_id: str = Form(None)
+):
+    if not nyayasetu_instance:
+        raise HTTPException(status_code=503, detail="NyayaSetu pipeline is not initialized yet.")
+    
+    upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    file_path = os.path.join(upload_dir, file.filename)
+    with open(file_path, "wb") as buffer:
+        import shutil
+        shutil.copyfileobj(file.file, buffer)
+        
+    try:
+        res_doc_id = nyayasetu_instance.ingest(
+            pdf_path=file_path,
+            doc_type=doc_type,
+            doc_id=doc_id,
+            parent_id=parent_id if parent_id else None,
+        )
+        return {"doc_id": res_doc_id, "status": "ingested", "filename": file.filename}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+
+@app.get("/documents")
+async def get_documents():
+    if not nyayasetu_instance:
+        raise HTTPException(status_code=503, detail="NyayaSetu pipeline is not initialized yet.")
+        
+    documents = []
+    
+    # Get Landmark documents
+    try:
+        landmark_data = nyayasetu_instance.landmark_vectorstore.get()
+        if landmark_data and 'metadatas' in landmark_data:
+            for meta in landmark_data['metadatas']:
+                if meta and meta.get('doc_id'):
+                    doc = {
+                        "doc_id": meta.get('doc_id'),
+                        "doc_type": "landmark",
+                        "case_name": meta.get('case_name', 'Unknown'),
+                        "date": meta.get('date', 'Unknown')
+                    }
+                    if doc not in documents:
+                        documents.append(doc)
+    except Exception as e:
+        print(f"Error fetching landmark docs: {e}")
+        
+    # Get Citing documents
+    try:
+        citing_data = nyayasetu_instance.citing_vectorstore.get()
+        if citing_data and 'metadatas' in citing_data:
+            for meta in citing_data['metadatas']:
+                if meta and meta.get('doc_id'):
+                    doc = {
+                        "doc_id": meta.get('doc_id'),
+                        "parent_id": meta.get('parent_id'),
+                        "doc_type": "citing",
+                        "case_name": meta.get('case_name', 'Unknown'),
+                        "date": meta.get('date', 'Unknown')
+                    }
+                    if doc not in documents:
+                        documents.append(doc)
+    except Exception as e:
+        print(f"Error fetching citing docs: {e}")
+        
+    # Filter duplicates by doc_id
+    unique_docs = {doc['doc_id']: doc for doc in documents}.values()
+    return {"documents": list(unique_docs)}
 
 # ── Serve React frontend ───────────────────────────────────────────
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")

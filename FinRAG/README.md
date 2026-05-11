@@ -1,41 +1,42 @@
-# ⚖️ NyayaSetu — Indian Legal Research Assistant
+# ⚖️ NyayaSetu — Indian Legal Research Engine
 
-**NyayaSetu** is an AI-powered legal research tool that detects conflicts between Supreme Court of India judgments. It uses Retrieval-Augmented Generation (RAG) to analyze landmark and citing judgments, classify their relationship (AFFIRMS / NARROWS / OVERRULES), and present a structured legal analysis.
+**NyayaSetu** is an AI-powered legal research tool built to detect conflicts between Supreme Court of India judgments. It uses an advanced multi-stage Retrieval-Augmented Generation (RAG) pipeline to analyze landmark and citing judgments, classify their relationships (AFFIRMS / NARROWS / OVERRULES), and present a beautifully structured legal analysis.
 
-> **Current coverage:** Landmark Supreme Court judgments on employment & labor law.
+> **Current scope:** Built to analyze Supreme Court judgments, currently focused on employment & labor law.
+
+---
+
+## ✨ Features
+
+- **Knowledge Base Ingestion Pipeline** — A dedicated drag-and-drop UI to ingest new PDFs (Landmark or Citing judgments) dynamically into the vector store.
+- **Conflict Detection Engine** — Explicitly calls out when a new judgment overrules or narrows an older one, complete with a Legal Evolution Timeline.
+- **Blackish Premium UI** — A modern, single-file React SPA with a stunning dark theme, glassmorphism elements, and smooth micro-animations.
+- **Two-Stage Retrieval** — Combines BM25 keyword search with dense vector search, passing results through a Cross-Encoder re-ranker for maximum accuracy.
 
 ---
 
 ## 🏗️ Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────────┐
 │                   React Frontend                     │
 │          (Single-file SPA · Tailwind CSS)            │
+│         [ Assistant ]   |   [ Knowledge Base ]       │
 ├──────────────────────────────────────────────────────┤
-│                   FastAPI Backend                     │
-│            POST /query · POST /ingest · GET /health  │
+│                   FastAPI Backend                    │
+│   /query · /ingest_upload · /documents · /health     │
 ├──────────────────────────────────────────────────────┤
-│                  NyayaSetu Pipeline                   │
-│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐ │
-│  │  Document    │  │  NyayaSetu   │  │  Conflict   │ │
-│  │  Ingester    │  │  Retriever   │  │  Detector   │ │
-│  └─────────────┘  └──────────────┘  └─────────────┘ │
+│                  NyayaSetu Pipeline                  │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐  │
+│  │  Document   │  │  NyayaSetu   │  │  Conflict   │  │
+│  │  Ingester   │  │  Retriever   │  │  Detector   │  │
+│  └─────────────┘  └──────────────┘  └─────────────┘  │
 ├──────────────────────────────────────────────────────┤
 │  ChromaDB (Vector Store) · HuggingFace Embeddings    │
 │  BM25 (Keyword Search) · Cross-Encoder Re-ranker     │
-│  Google Gemini 2.5 Flash (LLM)                       │
+│  Groq LLaMA 3.3 70B (LLM)                            │
 └──────────────────────────────────────────────────────┘
 ```
-
-### RAG Pipeline
-
-| Stage | Component | Detail |
-|-------|-----------|--------|
-| **Ingestion** | `DocumentIngester` | Parses PDFs via pdfplumber, extracts metadata, chunks with parent/child splitters, stores in ChromaDB |
-| **Retrieval** | `NyayaSetuRetriever` | Hybrid search (BM25 + vector, 60/40 weighting) → Cross-Encoder re-ranking (BAAI/bge-reranker-base) |
-| **Conflict Detection** | `ConflictDetector` | Gemini 2.5 Flash classifies the relationship and generates a structured legal analysis |
-| **Orchestration** | `NyayaSetu` | Singleton that wires everything together via dependency injection |
 
 ---
 
@@ -45,7 +46,7 @@
 
 ```bash
 cd FinRAG
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -55,33 +56,23 @@ pip install -r requirements.txt
 Create a `.env` file in the `FinRAG/` directory:
 
 ```env
-GOOGLE_API_KEY=your_google_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
-> Get a key from [Google AI Studio](https://aistudio.google.com/apikey).
-
-### 3. Ingest judgments (first run only)
+### 3. Start the API server
 
 ```bash
-python main.py
+python3 api.py
 ```
 
-This ingests the bundled PDFs into the ChromaDB vector store.
-
-### 4. Start the API server
-
-```bash
-python api.py
-```
-
-The server starts at **http://localhost:8000** — the frontend is served automatically.
+The server starts at **http://localhost:8000**. The frontend is served automatically at the root.
 
 ---
 
 ## 📡 API Endpoints
 
 ### `GET /health`
-Returns `{"status": "ok"}` when the pipeline is initialized.
+Liveness check.
 
 ### `POST /query`
 ```json
@@ -92,63 +83,53 @@ Returns `{"status": "ok"}` when the pipeline is initialized.
 {
   "answer": "...",
   "conflict_type": "NARROWS",
-  "landmark_case": "State Of Haryana vs Piara Singh, 1992",
-  "citing_case": "Secretary, State Of Karnataka vs Umadevi, 2006",
+  "landmark_case": "State Of Haryana vs Piara Singh",
+  "citing_case": "Secretary, State Of Karnataka vs Umadevi",
   "conflict_detected": true
 }
 ```
 
-### `POST /ingest`
-```json
-{
-  "pdf_path": "/absolute/path/to/judgment.pdf",
-  "doc_type": "landmark",
-  "doc_id": "unique_id",
-  "parent_id": null
-}
-```
+### `POST /ingest_upload`
+Multipart Form-Data endpoint for uploading PDFs.
+- `file`: The PDF file
+- `doc_type`: "landmark" | "citing"
+- `doc_id`: Unique identifier (e.g., `Bangalore_water_supply_1978`)
+- `parent_id`: The ID of the landmark it cites (if `doc_type` is citing).
+
+### `GET /documents`
+Returns a list of all uniquely ingested documents in the vector store with their metadata.
 
 ---
 
-## 🖥️ Frontend Features
+## 🖥️ Frontend Overview
 
-- **Dark glassmorphism UI** with ambient animations
-- **Chat interface** for querying the RAG pipeline
-- **Conflict badges** — color-coded (🔴 OVERRULES · 🟠 NARROWS · 🟢 AFFIRMS)
-- **Case cards** showing landmark and citing judgments side by side
-- **Legal Evolution Timeline** — horizontal visual showing how the law evolved between judgments
-- **Sample query chips** for quick exploration
+The UI is a sleek, blackish premium dashboard located in `frontend/index.html`. It has two main tabs:
+
+### 1. Assistant Tab
+- **Chat interface** for querying the RAG pipeline.
+- **Conflict badges** — color-coded (🔴 OVERRULES · 🟠 NARROWS · 🟢 AFFIRMS).
+- **Legal Evolution Timeline** — horizontal visual showing how the law evolved between judgments.
+
+### 2. Knowledge Base Tab
+- **Drag-and-Drop Ingestion:** Upload new PDFs directly from the browser.
+- **Classification Dropdown:** Tag documents as Landmark or Citing.
+- **Ingested Documents List:** A live view of all judgments currently sitting in ChromaDB.
 
 ---
 
 ## 📁 Project Structure
 
-```
+```text
 FinRAG/
 ├── main.py              # NyayaSetu RAG pipeline (core logic)
 ├── api.py               # FastAPI backend
-├── .env                 # Environment variables (not committed)
+├── .env                 # Environment variables
 ├── frontend/
-│   └── index.html       # React + Tailwind single-file SPA
+│   └── index.html       # React + Tailwind SPA (Blackish Premium)
 ├── nyayasetu_db/        # ChromaDB persistent storage
-├── *.PDF                # Supreme Court judgment PDFs
+├── uploads/             # Temporarily stages uploaded PDFs
 └── README.md
 ```
-
----
-
-## 🔧 Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **LLM** | Google Gemini 2.5 Flash |
-| **Embeddings** | all-MiniLM-L6-v2 (HuggingFace) |
-| **Re-ranker** | BAAI/bge-reranker-base (Cross-Encoder) |
-| **Vector DB** | ChromaDB (persistent) |
-| **Keyword Search** | BM25Retriever |
-| **Framework** | LangChain (Classic + Community) |
-| **Backend** | FastAPI + Uvicorn |
-| **Frontend** | React 18 + Tailwind CSS (CDN) |
 
 ---
 

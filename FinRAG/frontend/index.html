@@ -20,9 +20,9 @@
         extend: {
           fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
           colors: {
-            surface: { 800: '#1a1a2e', 700: '#16213e', 600: '#0f3460', 500: '#1a1a3e' },
-            accent:  { DEFAULT: '#e94560', light: '#ff6b6b' },
-            gold:    { DEFAULT: '#f5c542', dark: '#d4a017' },
+            surface: { 900: '#030303', 800: '#0a0a0a', 700: '#111111', 600: '#1a1a1a' },
+            accent:  { DEFAULT: '#d4af37', light: '#f3e5ab' }, // Muted gold
+            brand:   { DEFAULT: '#ffffff', muted: '#a1a1aa' },
           },
           animation: {
             'pulse-slow': 'pulse 3s cubic-bezier(0.4,0,0.6,1) infinite',
@@ -49,16 +49,16 @@
 
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    body { margin: 0; background: #0b0b1a; font-family: 'Inter', system-ui, sans-serif; }
+    body { margin: 0; background: #030303; font-family: 'Inter', system-ui, sans-serif; color: #ffffff; }
 
     /* Custom scrollbar */
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(233,69,96,.35); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 999px; }
 
     /* Gradient text helper */
     .text-gradient {
-      background: linear-gradient(135deg, #e94560 0%, #f5c542 50%, #e94560 100%);
+      background: linear-gradient(135deg, #ffffff 0%, #d4af37 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-size: 200% auto;
@@ -66,33 +66,45 @@
 
     /* Glass card */
     .glass {
-      background: rgba(26, 26, 46, 0.65);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(10, 10, 10, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    
+    .glass-input {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      transition: all 0.2s ease;
+    }
+    .glass-input:focus {
+      background: rgba(255,255,255,0.05);
+      border-color: rgba(212, 175, 55, 0.5);
+      outline: none;
     }
 
     /* Markdown-ish formatting inside answer */
     .answer-text p { margin-bottom: 0.75rem; }
-    .answer-text strong { color: #f5c542; font-weight: 600; }
+    .answer-text strong { color: #ffffff; font-weight: 600; }
     .answer-text ul, .answer-text ol { padding-left: 1.25rem; margin-bottom: 0.75rem; }
     .answer-text li { margin-bottom: 0.35rem; }
-    .answer-text em { color: #a5b4fc; }
+    .answer-text em { color: #a1a1aa; }
 
     /* Shimmer bar for loading */
     .shimmer-bar {
-      background: linear-gradient(90deg, rgba(233,69,96,0.08) 25%, rgba(233,69,96,0.22) 50%, rgba(233,69,96,0.08) 75%);
+      background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
       background-size: 200% 100%;
       animation: shimmer 1.6s linear infinite;
     }
 
     /* Timeline styles */
     .timeline-gradient {
-      background: linear-gradient(90deg, rgba(99,102,241,0.12) 0%, rgba(233,69,96,0.12) 50%, rgba(245,158,11,0.12) 100%);
+      background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(212,175,55,0.05) 50%, rgba(255,255,255,0.03) 100%);
+      border: 1px solid rgba(255,255,255,0.05);
     }
     .timeline-arrow-line {
       position: relative;
-      height: 3px;
+      height: 2px;
       border-radius: 999px;
     }
     .timeline-arrow-line::after {
@@ -101,18 +113,20 @@
       right: -1px;
       top: 50%;
       transform: translateY(-50%);
-      border: 6px solid transparent;
-      border-left-width: 10px;
+      border: 5px solid transparent;
+      border-left-width: 8px;
     }
-    .timeline-arrow-red    { background: rgba(239,68,68,0.5); }
-    .timeline-arrow-red::after    { border-left-color: rgba(239,68,68,0.7); }
-    .timeline-arrow-orange { background: rgba(249,115,22,0.5); }
-    .timeline-arrow-orange::after { border-left-color: rgba(249,115,22,0.7); }
-    .timeline-arrow-green  { background: rgba(16,185,129,0.5); }
-    .timeline-arrow-green::after  { border-left-color: rgba(16,185,129,0.7); }
+    
+    /* Elegant arrow colors */
+    .timeline-arrow-red    { background: rgba(239,68,68,0.4); }
+    .timeline-arrow-red::after    { border-left-color: rgba(239,68,68,0.6); }
+    .timeline-arrow-orange { background: rgba(249,115,22,0.4); }
+    .timeline-arrow-orange::after { border-left-color: rgba(249,115,22,0.6); }
+    .timeline-arrow-green  { background: rgba(16,185,129,0.4); }
+    .timeline-arrow-green::after  { border-left-color: rgba(16,185,129,0.6); }
 
     @keyframes arrowPulse {
-      0%, 100% { opacity: 0.6; }
+      0%, 100% { opacity: 0.5; }
       50%      { opacity: 1; }
     }
     .arrow-pulse { animation: arrowPulse 2.5s ease-in-out infinite; }
@@ -140,11 +154,35 @@
       }
       return res.json();
     }
+    
+    async function fetchDocuments() {
+      const res = await fetch(`${API}/documents`);
+      if (!res.ok) throw new Error("Failed to fetch documents");
+      return res.json();
+    }
+    
+    async function uploadDocument(file, docType, docId, parentId) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("doc_type", docType);
+      formData.append("doc_id", docId);
+      if (parentId) formData.append("parent_id", parentId);
+      
+      const res = await fetch(`${API}/ingest_upload`, {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }
 
     /* ── Tiny markdown→JSX ──────────────────────────────── */
     function renderMarkdown(text) {
       if (!text) return null;
-      // Split into lines, convert bold / italic / bullets
       const html = text
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.+?)\*/g, "<em>$1</em>")
@@ -159,9 +197,9 @@
     function ConflictBadge({ type }) {
       if (!type) return null;
       const map = {
-        OVERRULES: { bg: "bg-red-500/20",    border: "border-red-500/40",    text: "text-red-400",    dot: "bg-red-400" },
-        NARROWS:   { bg: "bg-orange-500/20",  border: "border-orange-500/40",  text: "text-orange-400", dot: "bg-orange-400" },
-        AFFIRMS:   { bg: "bg-emerald-500/20", border: "border-emerald-500/40", text: "text-emerald-400",dot: "bg-emerald-400" },
+        OVERRULES: { bg: "bg-red-500/10",    border: "border-red-500/30",    text: "text-red-400",    dot: "bg-red-400" },
+        NARROWS:   { bg: "bg-orange-500/10",  border: "border-orange-500/30",  text: "text-orange-400", dot: "bg-orange-400" },
+        AFFIRMS:   { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-400",dot: "bg-emerald-400" },
       };
       const s = map[type] || map.AFFIRMS;
       return (
@@ -175,18 +213,13 @@
     /* ── Timeline summary extraction ───────────────────── */
     function extractSummaries(answer, landmarkCase, citingCase) {
       if (!answer || !landmarkCase || !citingCase) return { landmark: "", citing: "", change: "" };
-
-      // Normalise the answer — collapse whitespace for easier searching
       const text = answer.replace(/\n+/g, " ").replace(/\s+/g, " ");
 
       function grab(caseName) {
-        // Escape regex-special chars in the case name
         const esc = caseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        // Try to find 1-2 sentences after the case name mention
         const re = new RegExp(esc + "[^.]*?\\.([^.]*?\\.?)?", "i");
         const m = text.match(re);
         if (m) {
-          // Clean up and trim to ~180 chars
           let s = m[0].replace(new RegExp("^" + esc, "i"), "").replace(/^[\s,:\-–—*]+/, "").trim();
           if (s.length > 180) s = s.slice(0, 177) + "…";
           return s || null;
@@ -194,18 +227,15 @@
         return null;
       }
 
-      const landmarkSummary = grab(landmarkCase)
-        || "Established the foundational legal principle on this issue.";
-      const citingSummary = grab(citingCase)
-        || "Revisited the earlier position and modified the legal framework.";
+      const landmarkSummary = grab(landmarkCase) || "Established the foundational legal principle on this issue.";
+      const citingSummary = grab(citingCase) || "Revisited the earlier position and modified the legal framework.";
 
-      // Derive a short change-line from the conflict type context
       let change = "";
       const lower = text.toLowerCase();
-      if (lower.includes("narrows"))   change = "Scope of the earlier ruling was significantly narrowed";
-      else if (lower.includes("overrules")) change = "The earlier ruling was expressly overruled";
-      else if (lower.includes("affirms"))   change = "The earlier ruling was reaffirmed and upheld";
-      // Try to find a more specific line near "conflict" / "however" / "directly"
+      if (lower.includes("narrows"))   change = "Scope of the earlier ruling was narrowed";
+      else if (lower.includes("overrules")) change = "The earlier ruling was overruled";
+      else if (lower.includes("affirms"))   change = "The earlier ruling was reaffirmed";
+      
       const conflictRe = /(?:however|directly conflicts?|significantly)[^.]{10,120}\./i;
       const cm = text.match(conflictRe);
       if (cm) change = cm[0].trim();
@@ -219,92 +249,72 @@
       const [open, setOpen] = useState(false);
       if (!data.landmark_case || !data.citing_case) return null;
 
-      const { landmark, citing, change } = extractSummaries(
-        data.answer, data.landmark_case, data.citing_case
-      );
+      const { landmark, citing, change } = extractSummaries(data.answer, data.landmark_case, data.citing_case);
 
       const arrowColors = {
-        OVERRULES: { line: "timeline-arrow-red",    badge: "bg-red-500/20 border-red-500/40 text-red-400",     dot: "bg-red-400" },
-        NARROWS:   { line: "timeline-arrow-orange", badge: "bg-orange-500/20 border-orange-500/40 text-orange-400", dot: "bg-orange-400" },
-        AFFIRMS:   { line: "timeline-arrow-green",  badge: "bg-emerald-500/20 border-emerald-500/40 text-emerald-400", dot: "bg-emerald-400" },
+        OVERRULES: { line: "timeline-arrow-red",    badge: "bg-red-500/10 border-red-500/30 text-red-400",     dot: "bg-red-400" },
+        NARROWS:   { line: "timeline-arrow-orange", badge: "bg-orange-500/10 border-orange-500/30 text-orange-400", dot: "bg-orange-400" },
+        AFFIRMS:   { line: "timeline-arrow-green",  badge: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400", dot: "bg-emerald-400" },
       };
       const ac = arrowColors[data.conflict_type] || arrowColors.AFFIRMS;
 
       return (
         <div className="space-y-3">
-          {/* Toggle button */}
           <button
-            id="timeline-toggle"
             onClick={() => setOpen(!open)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl glass text-xs font-semibold text-white/50 hover:text-white/80 hover:border-white/10 transition-all duration-200 cursor-pointer group"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl glass text-xs font-semibold text-white/50 hover:text-white/80 hover:border-white/20 transition-all duration-200 cursor-pointer group"
           >
-            <svg
-              className={`w-3.5 h-3.5 transition-transform duration-300 ${open ? "rotate-90" : ""}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"
-            >
+            <svg className={`w-3 h-3 transition-transform duration-300 ${open ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
             <span className="uppercase tracking-widest">{open ? "Hide Timeline" : "Show Timeline"}</span>
             <span className="text-white/20">— Legal Evolution</span>
           </button>
 
-          {/* Timeline panel */}
           {open && (
             <div className="animate-slide-up glass rounded-2xl p-6 overflow-hidden">
-              {/* Section header */}
               <div className="flex items-center gap-2 mb-6">
-                <span className="w-1.5 h-7 rounded-full bg-gradient-to-b from-indigo-400 to-orange-400" />
-                <span className="text-xs font-semibold uppercase tracking-widest text-white/40">Legal Evolution Timeline</span>
+                <span className="w-1.5 h-7 rounded-full bg-gradient-to-b from-white/80 to-white/20" />
+                <span className="text-xs font-semibold uppercase tracking-widest text-white/40">Evolution Timeline</span>
               </div>
 
-              {/* Gradient backdrop */}
               <div className="timeline-gradient rounded-xl p-6 relative">
-                {/* Two nodes + arrow */}
                 <div className="flex items-stretch gap-0">
-                  {/* Left node — Landmark */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="w-3 h-3 rounded-full bg-indigo-400 ring-4 ring-indigo-400/20 flex-shrink-0" />
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-indigo-300/70">Landmark</span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-white/80 ring-4 ring-white/10 flex-shrink-0" />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-white/50">Landmark</span>
                     </div>
-                    <div className="ml-1.5 pl-4 border-l-2 border-indigo-400/20">
-                      <p className="text-[13px] font-semibold text-white/90 leading-snug mb-1.5">
-                        {data.landmark_case}
-                      </p>
-                      <p className="text-[12px] text-white/45 leading-relaxed">{landmark}</p>
+                    <div className="ml-1 pl-4 border-l border-white/10">
+                      <p className="text-[13px] font-semibold text-white/90 leading-snug mb-1.5">{data.landmark_case}</p>
+                      <p className="text-[12px] text-white/40 leading-relaxed">{landmark}</p>
                     </div>
                   </div>
 
-                  {/* Center arrow */}
                   <div className="flex flex-col items-center justify-center px-4 min-w-[120px]">
                     <div className={`w-full ${ac.line} timeline-arrow-line arrow-pulse`} />
-                    <div className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide border ${ac.badge}`}>
+                    <div className={`mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide border ${ac.badge}`}>
                       <span className={`w-1 h-1 rounded-full ${ac.dot}`} />
                       {data.conflict_type || "—"}
                     </div>
                   </div>
 
-                  {/* Right node — Citing */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 justify-end">
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-orange-300/70">Citing</span>
-                      <span className="w-3 h-3 rounded-full bg-orange-400 ring-4 ring-orange-400/20 flex-shrink-0" />
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-white/50">Citing</span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-accent ring-4 ring-accent/10 flex-shrink-0" />
                     </div>
-                    <div className="mr-1.5 pr-4 border-r-2 border-orange-400/20 text-right">
-                      <p className="text-[13px] font-semibold text-white/90 leading-snug mb-1.5">
-                        {data.citing_case}
-                      </p>
-                      <p className="text-[12px] text-white/45 leading-relaxed">{citing}</p>
+                    <div className="mr-1 pr-4 border-r border-accent/20 text-right">
+                      <p className="text-[13px] font-semibold text-white/90 leading-snug mb-1.5">{data.citing_case}</p>
+                      <p className="text-[12px] text-white/40 leading-relaxed">{citing}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Change line */}
                 {change && (
-                  <div className="mt-5 pt-4 border-t border-white/[0.06] text-center">
-                    <p className="text-[12px] text-white/35 italic">
-                      <span className="text-white/50 not-italic font-medium">What changed:</span>{" "}
-                      {change}
+                  <div className="mt-5 pt-4 border-t border-white/5 text-center">
+                    <p className="text-[12px] text-white/30 italic">
+                      <span className="text-white/50 not-italic font-medium">What changed:</span> {change}
                     </p>
                   </div>
                 )}
@@ -319,9 +329,9 @@
     function CaseCard({ label, caseName, icon }) {
       if (!caseName) return null;
       return (
-        <div className="glass rounded-2xl p-5 flex-1 min-w-[240px] transition-all duration-300 hover:border-white/10 hover:shadow-lg hover:shadow-accent/5 group">
+        <div className="glass rounded-2xl p-5 flex-1 min-w-[240px] transition-all duration-300 hover:border-white/20 hover:shadow-lg hover:shadow-white/5 group">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">{icon}</span>
+            <span className="text-lg opacity-80 grayscale group-hover:grayscale-0 transition-all">{icon}</span>
             <span className="text-[11px] font-semibold uppercase tracking-widest text-white/40">{label}</span>
           </div>
           <p className="text-sm text-white/80 leading-relaxed font-medium group-hover:text-white transition-colors">
@@ -335,29 +345,26 @@
     function ResponseCard({ data }) {
       return (
         <div className="animate-slide-up space-y-5">
-          {/* Conflict warning */}
           {data.conflict_detected && (
-            <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl bg-red-500/10 border border-red-500/25 animate-fade-in">
-              <span className="text-xl">⚠️</span>
-              <span className="text-red-300 text-sm font-medium">Conflict Detected between judgments</span>
+            <div className="flex items-center gap-3 px-5 py-3.5 rounded-xl bg-red-500/10 border border-red-500/20 animate-fade-in">
+              <span className="text-xl opacity-80">⚠️</span>
+              <span className="text-red-300/90 text-sm font-medium">Conflict Detected between judgments</span>
             </div>
           )}
 
-          {/* Answer section */}
           <div className="glass rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2">
-                <span className="w-1.5 h-7 rounded-full bg-gradient-to-b from-accent to-gold" />
+                <span className="w-1.5 h-7 rounded-full bg-gradient-to-b from-white to-white/20" />
                 <span className="text-xs font-semibold uppercase tracking-widest text-white/50">Analysis</span>
               </div>
               <ConflictBadge type={data.conflict_type} />
             </div>
-            <div className="text-[15px] text-white/75 leading-[1.8]">
+            <div className="text-[15px] text-white/80 leading-[1.8]">
               {renderMarkdown(data.answer)}
             </div>
           </div>
 
-          {/* Case cards */}
           {(data.landmark_case || data.citing_case) && (
             <div className="flex flex-wrap gap-4">
               <CaseCard label="Landmark Judgment" caseName={data.landmark_case} icon="⚖️" />
@@ -365,7 +372,6 @@
             </div>
           )}
 
-          {/* Legal Evolution Timeline */}
           <LegalTimeline data={data} />
         </div>
       );
@@ -376,17 +382,16 @@
       return (
         <div className="animate-fade-in space-y-4 py-2">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-5 h-5 rounded-full border-2 border-accent/40 border-t-accent animate-spin" />
-            <span className="text-sm text-white/40 font-medium">Analyzing Supreme Court judgments…</span>
+            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+            <span className="text-sm text-white/40 font-medium tracking-wide">Analyzing Supreme Court judgments…</span>
           </div>
           {[100, 85, 92, 60].map((w, i) => (
-            <div key={i} className="shimmer-bar rounded-lg h-4" style={{ width: `${w}%` }} />
+            <div key={i} className="shimmer-bar rounded-lg h-3" style={{ width: `${w}%` }} />
           ))}
         </div>
       );
     }
 
-    /* ── Sample query chips ─────────────────────────────── */
     const SAMPLES = [
       "Can contract workers claim permanent employment?",
       "What is the definition of industry?",
@@ -401,7 +406,7 @@
               key={q}
               onClick={() => onSelect(q)}
               disabled={disabled}
-              className="px-4 py-2 text-[13px] rounded-full glass text-white/60 hover:text-white hover:border-accent/30 transition-all duration-200 hover:shadow-md hover:shadow-accent/10 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="px-4 py-2 text-[12px] rounded-full glass text-white/60 hover:text-white hover:border-white/30 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {q}
             </button>
@@ -410,13 +415,10 @@
       );
     }
 
-    /* ── Main App ───────────────────────────────────────── */
-    function App() {
-      const [messages, setMessages] = useState([]);
-      const [input, setInput]       = useState("");
-      const [loading, setLoading]   = useState(false);
-      const [error, setError]       = useState(null);
-      const bottomRef               = useRef(null);
+    /* ── Chat Assistant View ────────────────────────────── */
+    function ChatAssistant({ messages, setMessages, loading, setLoading, error, setError }) {
+      const [input, setInput] = useState("");
+      const bottomRef = useRef(null);
 
       useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -446,71 +448,33 @@
       const isEmpty = messages.length === 0 && !loading;
 
       return (
-        <div className="min-h-screen flex flex-col text-white relative overflow-hidden">
-          {/* Ambient blobs */}
-          <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
-            <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-accent/[0.04] blur-[120px] animate-float" />
-            <div className="absolute -bottom-60 -right-60 w-[700px] h-[700px] rounded-full bg-indigo-600/[0.04] blur-[140px] animate-float" style={{ animationDelay: "3s" }} />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-gold/[0.02] blur-[100px]" />
-          </div>
-
-          {/* Header */}
-          <header className="sticky top-0 z-30 glass border-b border-white/[0.04]">
-            <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent to-gold flex items-center justify-center text-lg shadow-lg shadow-accent/20">
-                  ⚖️
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold tracking-tight">
-                    <span className="text-gradient">NyayaSetu</span>
-                  </h1>
-                  <p className="text-[11px] text-white/30 font-medium -mt-0.5 tracking-wide">Indian Legal Research Assistant</p>
-                </div>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] text-emerald-400/80 font-medium">Online</span>
-              </div>
-            </div>
-          </header>
-
-          {/* Chat area */}
+        <div className="flex flex-col h-[calc(100vh-73px)]">
           <main className="flex-1 overflow-y-auto">
             <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-
-              {/* Empty state */}
               {isEmpty && (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in space-y-8">
-                  <div className="relative">
-                    <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-accent/20 to-gold/20 flex items-center justify-center text-4xl border border-white/[0.06] shadow-2xl shadow-accent/10 animate-float">
-                      ⚖️
-                    </div>
-                    <div className="absolute -inset-3 rounded-3xl bg-accent/5 blur-xl -z-10" />
+                <div className="flex flex-col items-center justify-center min-h-[50vh] animate-fade-in space-y-8">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-3xl border border-white/10 shadow-xl">
+                    ⚖️
                   </div>
                   <div className="text-center space-y-3">
-                    <h2 className="text-3xl font-extrabold tracking-tight">
-                      <span className="text-gradient">NyayaSetu</span>
+                    <h2 className="text-2xl font-semibold tracking-tight text-white/90">
+                      NyayaSetu Assistant
                     </h2>
-                    <p className="text-white/40 text-sm max-w-md">
-                      AI-powered conflict detection between Supreme Court of India judgments.
-                    </p>
-                    <p className="text-white/25 text-xs max-w-sm mx-auto leading-relaxed">
-                      Covers landmark Supreme Court judgments on employment &amp; labor law
+                    <p className="text-white/40 text-sm max-w-md mx-auto">
+                      AI-powered conflict detection between Supreme Court judgments.
                     </p>
                   </div>
-                  <div className="space-y-3">
-                    <p className="text-center text-[11px] text-white/25 uppercase tracking-widest font-semibold">Try a sample query</p>
+                  <div className="space-y-3 pt-4">
+                    <p className="text-center text-[10px] text-white/30 uppercase tracking-widest font-semibold">Suggested Queries</p>
                     <SampleChips onSelect={handleSend} disabled={loading} />
                   </div>
                 </div>
               )}
 
-              {/* Messages */}
               {messages.map((msg, i) =>
                 msg.role === "user" ? (
                   <div key={i} className="flex justify-end animate-fade-in">
-                    <div className="max-w-[80%] px-5 py-3 rounded-2xl rounded-br-md bg-gradient-to-r from-accent/20 to-accent/10 border border-accent/20 text-sm text-white/90 leading-relaxed">
+                    <div className="max-w-[80%] px-5 py-3 rounded-2xl rounded-br-sm bg-white/10 border border-white/10 text-sm text-white/90 leading-relaxed">
                       {msg.text}
                     </div>
                   </div>
@@ -520,57 +484,328 @@
                   </div>
                 )
               )}
-
-              {/* Loading */}
               {loading && <LoadingSkeleton />}
-
-              {/* Error */}
               {error && (
-                <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/25 animate-fade-in">
-                  <span className="text-lg">❌</span>
+                <div className="flex items-center gap-3 px-5 py-3 rounded-xl bg-red-500/10 border border-red-500/20 animate-fade-in">
+                  <span className="text-lg opacity-80">❌</span>
                   <span className="text-red-300 text-sm">{error}</span>
                 </div>
               )}
-
               <div ref={bottomRef} />
             </div>
           </main>
 
-          {/* Input bar */}
-          <footer className="sticky bottom-0 z-30 glass border-t border-white/[0.04]">
-            <div className="max-w-4xl mx-auto px-6 py-4">
+          <footer className="glass border-t-0 border-white/5 py-4 px-6">
+            <div className="max-w-4xl mx-auto">
               {!isEmpty && messages.length > 0 && (
-                <div className="mb-3">
+                <div className="mb-3 flex justify-center">
                   <SampleChips onSelect={handleSend} disabled={loading} />
                 </div>
               )}
               <div className="flex items-center gap-3">
-                <div className="flex-1 relative">
-                  <input
-                    id="query-input"
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Ask about Indian Supreme Court judgments…"
-                    disabled={loading}
-                    className="w-full px-5 py-3.5 pr-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-white/25 outline-none focus:border-accent/40 focus:ring-2 focus:ring-accent/10 transition-all duration-200 disabled:opacity-50"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask about Indian Supreme Court judgments…"
+                  disabled={loading}
+                  className="flex-1 px-5 py-3.5 rounded-xl glass-input text-sm text-white placeholder-white/30"
+                />
                 <button
-                  id="send-button"
                   onClick={() => handleSend()}
                   disabled={loading || !input.trim()}
-                  className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center text-white shadow-lg shadow-accent/20 hover:shadow-accent/40 transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 cursor-pointer"
+                  className="w-12 h-12 rounded-xl bg-white text-black flex items-center justify-center hover:bg-gray-200 transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer font-bold"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 2L11 13" /><path d="M22 2L15 22L11 13L2 9L22 2Z" />
                   </svg>
                 </button>
               </div>
-              <p className="text-center text-[10px] text-white/15 mt-3">NyayaSetu — Powered by RAG + Gemini • Not legal advice</p>
+              <p className="text-center text-[10px] text-white/20 mt-3">Powered by Gemini &amp; Chroma • Not legal advice</p>
             </div>
           </footer>
+        </div>
+      );
+    }
+
+    /* ── Knowledge Base View ────────────────────────────── */
+    function KnowledgeBase() {
+      const [documents, setDocuments] = useState([]);
+      const [loading, setLoading] = useState(true);
+      
+      const [file, setFile] = useState(null);
+      const [docType, setDocType] = useState('landmark');
+      const [docId, setDocId] = useState('');
+      const [parentId, setParentId] = useState('');
+      const [uploading, setUploading] = useState(false);
+      const [uploadStatus, setUploadStatus] = useState(null);
+      
+      useEffect(() => {
+        loadDocuments();
+      }, []);
+      
+      async function loadDocuments() {
+        setLoading(true);
+        try {
+          const data = await fetchDocuments();
+          setDocuments(data.documents || []);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setLoading(false);
+        }
+      }
+      
+      const handleFileDrop = (e) => {
+        e.preventDefault();
+        const droppedFile = e.dataTransfer?.files[0] || e.target.files[0];
+        if (droppedFile && droppedFile.type === "application/pdf") {
+          setFile(droppedFile);
+          if (!docId) {
+            setDocId(droppedFile.name.replace('.pdf', '').replace('.PDF', ''));
+          }
+        } else {
+          alert("Please upload a valid PDF file.");
+        }
+      };
+      
+      const handleUpload = async () => {
+        if (!file || !docId) return;
+        setUploading(true);
+        setUploadStatus(null);
+        try {
+          await uploadDocument(file, docType, docId, parentId);
+          setUploadStatus({ type: 'success', msg: `Successfully ingested ${docId}` });
+          setFile(null);
+          setDocId('');
+          setParentId('');
+          loadDocuments();
+        } catch (e) {
+          setUploadStatus({ type: 'error', msg: e.message });
+        } finally {
+          setUploading(false);
+        }
+      };
+
+      return (
+        <div className="max-w-6xl mx-auto px-6 py-8 animate-fade-in h-[calc(100vh-73px)] overflow-y-auto">
+          
+          {/* Disclaimer Banner */}
+          <div className="mb-8 glass rounded-xl p-5 border-l-4 border-l-accent flex items-start gap-4">
+            <div className="text-2xl mt-0.5">ℹ️</div>
+            <div>
+              <h3 className="text-sm font-bold text-white mb-1">Knowledge Base Guidelines</h3>
+              <p className="text-xs text-white/60 leading-relaxed max-w-3xl">
+                Please ensure that the PDFs you upload are properly classified using the dropdown below as either a <strong>Landmark Judgment</strong> or a <strong>Citing Judgment</strong>. 
+                <br/><em>Note: The currently ingested system documents are strictly based on <strong>employment and labor laws</strong>. Please upload relevant files to maintain system integrity.</em>
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            {/* Left: Ingestion Form */}
+            <div className="lg:col-span-1 space-y-6">
+              <div className="glass rounded-2xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                  <span className="w-1.5 h-5 rounded-full bg-accent" />
+                  Ingest New PDF
+                </h3>
+                
+                <div className="space-y-5">
+                  {/* Dropzone */}
+                  <div 
+                    className={`border-2 border-dashed ${file ? 'border-accent bg-accent/5' : 'border-white/10 hover:border-white/30 bg-white/[0.02]'} rounded-xl p-8 text-center transition-all cursor-pointer`}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleFileDrop}
+                    onClick={() => document.getElementById('file-upload').click()}
+                  >
+                    <input type="file" id="file-upload" className="hidden" accept="application/pdf" onChange={handleFileDrop} />
+                    <div className="text-3xl mb-3 opacity-60">{file ? '📄' : '📥'}</div>
+                    <p className="text-sm font-medium text-white/80">
+                      {file ? file.name : 'Click or Drag PDF here'}
+                    </p>
+                    {!file && <p className="text-[10px] text-white/40 mt-2 uppercase tracking-widest">PDF ONLY</p>}
+                  </div>
+                  
+                  {/* Form fields */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-2">Classification</label>
+                    <div className="relative">
+                      <select 
+                        value={docType}
+                        onChange={(e) => setDocType(e.target.value)}
+                        className="w-full appearance-none px-4 py-3 rounded-lg glass-input text-sm text-white/90 cursor-pointer"
+                      >
+                        <option value="landmark" className="bg-surface-800 text-white">Landmark Judgment</option>
+                        <option value="citing" className="bg-surface-800 text-white">Citing Judgment</option>
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">▼</div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-2">Document ID</label>
+                    <input 
+                      type="text" 
+                      value={docId}
+                      onChange={(e) => setDocId(e.target.value)}
+                      placeholder="e.g. Bangalore_water_supply_1978"
+                      className="w-full px-4 py-3 rounded-lg glass-input text-sm text-white/90"
+                    />
+                  </div>
+                  
+                  {docType === 'citing' && (
+                    <div className="animate-fade-in">
+                      <label className="block text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-2">Parent Landmark ID</label>
+                      <input 
+                        type="text" 
+                        value={parentId}
+                        onChange={(e) => setParentId(e.target.value)}
+                        placeholder="ID of the landmark it cites"
+                        className="w-full px-4 py-3 rounded-lg glass-input text-sm text-white/90"
+                      />
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={handleUpload}
+                    disabled={!file || !docId || uploading}
+                    className="w-full py-3.5 rounded-lg bg-white text-black font-semibold text-sm hover:bg-gray-200 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-white/5 flex justify-center items-center gap-2"
+                  >
+                    {uploading ? (
+                      <><div className="w-4 h-4 rounded-full border-2 border-black/20 border-t-black animate-spin" /> Ingesting...</>
+                    ) : 'Upload & Ingest'}
+                  </button>
+                  
+                  {uploadStatus && (
+                    <div className={`p-3 rounded-lg text-xs font-medium border ${uploadStatus.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                      {uploadStatus.msg}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Right: Documents List */}
+            <div className="lg:col-span-2">
+              <div className="glass rounded-2xl p-6 h-full min-h-[400px]">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <span className="w-1.5 h-5 rounded-full bg-white/80" />
+                    Ingested Documents
+                  </h3>
+                  <button onClick={loadDocuments} className="text-white/40 hover:text-white transition-colors p-2" title="Refresh">
+                    🔄
+                  </button>
+                </div>
+                
+                {loading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3, 4].map(i => <div key={i} className="h-16 shimmer-bar rounded-xl w-full" />)}
+                  </div>
+                ) : documents.length === 0 ? (
+                  <div className="text-center py-20 text-white/30 text-sm">
+                    No documents ingested yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {documents.map((doc, idx) => (
+                      <div key={idx} className="glass rounded-xl p-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors border border-transparent hover:border-white/5">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${doc.doc_type === 'landmark' ? 'bg-white/10 text-white' : 'bg-accent/10 text-accent'}`}>
+                            {doc.doc_type === 'landmark' ? '⚖️' : '📜'}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-white/90">{doc.doc_id}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full ${doc.doc_type === 'landmark' ? 'bg-white/10 text-white/70' : 'bg-accent/10 text-accent/70'}`}>
+                                {doc.doc_type}
+                              </span>
+                              {doc.parent_id && (
+                                <span className="text-[10px] text-white/30 flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                                  {doc.parent_id}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right hidden sm:block">
+                          <p className="text-xs text-white/50">{doc.case_name !== 'Unknown' ? doc.case_name : ''}</p>
+                          <p className="text-[10px] text-white/30 mt-1">{doc.date !== 'Unknown' ? doc.date : ''}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Main App Component ─────────────────────────────── */
+    function App() {
+      const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'knowledge'
+      
+      // Shared chat state to persist across tab switches
+      const [messages, setMessages] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState(null);
+
+      return (
+        <div className="min-h-screen flex flex-col text-white relative overflow-hidden">
+          {/* Ambient subtle blurs for premium feel */}
+          <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full bg-white/[0.015] blur-[100px] -translate-y-1/2 translate-x-1/4" />
+            <div className="absolute bottom-0 left-0 w-[600px] h-[600px] rounded-full bg-accent/[0.02] blur-[120px] translate-y-1/4 -translate-x-1/4" />
+          </div>
+
+          {/* Top Navbar */}
+          <header className="sticky top-0 z-40 glass border-b border-white/[0.05]">
+            <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-lg text-black shadow-lg shadow-white/10">
+                  🏛️
+                </div>
+                <div>
+                  <h1 className="text-base font-bold tracking-tight text-white">NyayaSetu</h1>
+                  <p className="text-[10px] text-white/40 font-medium tracking-widest uppercase mt-0.5">Legal Engine</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                <button 
+                  onClick={() => setActiveTab('chat')}
+                  className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'chat' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70'}`}
+                >
+                  Assistant
+                </button>
+                <button 
+                  onClick={() => setActiveTab('knowledge')}
+                  className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'knowledge' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/70'}`}
+                >
+                  Knowledge Base
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content Area */}
+          {activeTab === 'chat' ? (
+            <ChatAssistant 
+              messages={messages} setMessages={setMessages}
+              loading={loading} setLoading={setLoading}
+              error={error} setError={setError}
+            />
+          ) : (
+            <KnowledgeBase />
+          )}
+          
         </div>
       );
     }
