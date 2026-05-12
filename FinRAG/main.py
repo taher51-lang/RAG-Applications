@@ -148,11 +148,11 @@ class NyayaSetuRetriever:
             ]
         }
 
-    def get_cross_encoder(self):
-        if self._cross_encoder is None:
-            from sentence_transformers import CrossEncoder
-            self._cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
-        return self._cross_encoder
+    # def get_cross_encoder(self):
+        # if self._cross_encoder is None:
+        #     from sentence_transformers import CrossEncoder
+        #     self._cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
+        # return self._cross_encoder
 
     def two_stage_retrieval(self, query, hybrid_retriever, k_final=5, return_scores=False):
         initial_results = hybrid_retriever.invoke(query)
