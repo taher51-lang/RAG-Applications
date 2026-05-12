@@ -1,10 +1,8 @@
-import sys
-import os
-from main import NyayaSetu
+print("Starting import test...")
 try:
-    ns = NyayaSetu()
-    ns.ingest("Secretary_State_Of_Karnataka_And_vs_Umadevi.PDF", "citing", "Secretary_State_Of_Karnataka_And_vs_Umadevi")
-    print("Ingestion successful.")
+    from main import NyayaSetu
+    print("Import successful")
 except Exception as e:
     import traceback
+    print(f"Import failed: {e}")
     traceback.print_exc()
