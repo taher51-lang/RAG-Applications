@@ -158,11 +158,19 @@ class NyayaSetuRetriever:
         initial_results = hybrid_retriever.invoke(query)
         if not initial_results:
             return ([], []) if return_scores else []
-        pairs = [[query, doc.page_content] for doc in initial_results]
-        scores = self.get_cross_encoder().predict(pairs)
-        scored_docs = sorted(zip(scores, initial_results), key=lambda x: x[0], reverse=True)
-        top_docs = [doc for score, doc in scored_docs[:k_final]]
-        top_scores = [float(score) for score, doc in scored_docs[:k_final]]
+
+        from langchain_cohere import CohereRerank
+        compressor = CohereRerank(
+        model="rerank-english-v3.0",
+        top_n=k_final,
+        cohere_api_key=os.getenv("COHERE_API_KEY")
+        )
+
+        reranked = compressor.compress_documents(initial_results, query)
+
+        top_docs = [doc for doc in reranked]
+        top_scores = [doc.metadata.get("relevance_score", 0.0) for doc in reranked]
+
         if return_scores:
             return top_docs, top_scores
         return top_docs
