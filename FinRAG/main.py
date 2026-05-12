@@ -9,7 +9,6 @@ from langchain_community.storage import UpstashRedisByteStore
 from upstash_redis import Redis
 # from ragas.llms import LangchainLLMWrapper
 # from ragas.embeddings import LangchainEmbeddingsWrapper
-from langchain_voyageai import VoyageAIEmbeddings
 from langchain_cohere import CohereEmbeddings
 
 import os
