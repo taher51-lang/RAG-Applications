@@ -24,7 +24,6 @@ from langchain_groq import ChatGroq
 
 # Models
 import chromadb
-from sentence_transformers import CrossEncoder
 
 from pinecone import Pinecone
 from pinecone_text.sparse import BM25Encoder
@@ -317,7 +316,6 @@ class NyayaSetu:
         )
         
         # 4. Initialize ML Models (Cross Encoder & Generative LLM)
-        self.cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
 
         self.llm = ChatGroq(
             model="llama-3.3-70b-versatile", 
