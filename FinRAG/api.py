@@ -48,7 +48,6 @@ class IngestRequest(BaseModel):
     parent_id: str | None = None
 
 # ── Global singleton ───────────────────────────────────────────────
-nyayasetu_instance: NyayaSetu | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
