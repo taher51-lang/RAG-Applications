@@ -137,43 +137,44 @@ class DocumentIngester:
 # mapping queries from citing judgments to landmark queries.
 # =====================================================================
 class NyayaSetuRetriever:
-    def __init__(self, landmark_hybrid, citing_hybrid, cross_encoder, llm):
+    def __init__(self, landmark_hybrid, citing_hybrid, llm):
         self.landmark_hybrid = landmark_hybrid
         self.citing_hybrid = citing_hybrid
-        self.cross_encoder = cross_encoder
+        self._cross_encoder = None  # lazy load — don't load at startup
         self.llm = llm
-        
-        # relationship_registry dictates which landmark applies to which citing judgment
         self.relationship_registry = {
-            "Secretary_State_Of_Karnataka_And_vs_Umadevi": [
-                "Piarasingh_Vs_State_Of_Punjab",
-                "Bangalore_water_supply_1978"
-            ]
-        }
+        "Secretary_State_Of_Karnataka_And_vs_Umadevi": [
+            "Piarasingh_Vs_State_Of_Punjab",
+            "Bangalore_water_supply_1978"
+        ]
+    }
 
-    def two_stage_retrieval(self, query, hybrid_retriever, k_final=5, return_scores=False):
-        """Executes Stage 1 (Hybrid retrieval) and Stage 2 (Cross-Encoder Re-ranking)."""
-        initial_results = hybrid_retriever.invoke(query)
-        
-        if not initial_results:
-            return ([], []) if return_scores else []
-        
-        pairs = [[query, doc.page_content] for doc in initial_results]
-        scores = self.cross_encoder.predict(pairs)
-    
-        scored_docs = sorted(
-            zip(scores, initial_results),
-            key=lambda x: x[0],
-            reverse=True
-        )
-    
-        top_docs = [doc for score, doc in scored_docs[:k_final]]
-        top_scores = [float(score) for score, doc in scored_docs[:k_final]]
-    
-        if return_scores:
-            return top_docs, top_scores
-        return top_docs
+def get_cross_encoder(self):
+    if self._cross_encoder is None:
+        from sentence_transformers import CrossEncoder
+        self._cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
+    return self._cross_encoder
 
+def two_stage_retrieval(self, query, hybrid_retriever, k_final=5, return_scores=False):
+    """Executes Stage 1 (Hybrid retrieval) and Stage 2 (Cross-Encoder Re-ranking)."""
+    initial_results = hybrid_retriever.invoke(query)
+    if not initial_results:
+        return ([], []) if return_scores else []
+    
+    pairs = [[query, doc.page_content] for doc in initial_results]
+    scores = self.get_cross_encoder().predict(pairs)  # lazy load here
+    
+    scored_docs = sorted(
+        zip(scores, initial_results),
+        key=lambda x: x[0],
+        reverse=True
+    )
+    top_docs = [doc for score, doc in scored_docs[:k_final]]
+    top_scores = [float(score) for score, doc in scored_docs[:k_final]]
+    
+    if return_scores:
+        return top_docs, top_scores
+    return top_docs
     def generate_landmark_query(self, user_query, citing_chunk):
         """Uses the LLM to rewrite the query contextually for landmark retrieval."""
         prompt = f"""
@@ -334,7 +335,6 @@ class NyayaSetu:
         self.retriever = NyayaSetuRetriever(
             self.landmark_hybrid_retriever, 
             self.citing_hybrid_retriever,
-            self.cross_encoder,
             self.llm
         )
         self.conflict_detector = ConflictDetector(self.llm)
