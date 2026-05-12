@@ -139,52 +139,41 @@ class NyayaSetuRetriever:
     def __init__(self, landmark_hybrid, citing_hybrid, llm):
         self.landmark_hybrid = landmark_hybrid
         self.citing_hybrid = citing_hybrid
-        self._cross_encoder = None  # lazy load — don't load at startup
+        self._cross_encoder = None
         self.llm = llm
         self.relationship_registry = {
-        "Secretary_State_Of_Karnataka_And_vs_Umadevi": [
-            "Piarasingh_Vs_State_Of_Punjab",
-            "Bangalore_water_supply_1978"
-        ]
-    }
+            "Secretary_State_Of_Karnataka_And_vs_Umadevi": [
+                "Piarasingh_Vs_State_Of_Punjab",
+                "Bangalore_water_supply_1978"
+            ]
+        }
 
-def get_cross_encoder(self):
-    if self._cross_encoder is None:
-        from sentence_transformers import CrossEncoder
-        self._cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
-    return self._cross_encoder
+    def get_cross_encoder(self):
+        if self._cross_encoder is None:
+            from sentence_transformers import CrossEncoder
+            self._cross_encoder = CrossEncoder('BAAI/bge-reranker-base')
+        return self._cross_encoder
 
-def two_stage_retrieval(self, query, hybrid_retriever, k_final=5, return_scores=False):
-    """Executes Stage 1 (Hybrid retrieval) and Stage 2 (Cross-Encoder Re-ranking)."""
-    initial_results = hybrid_retriever.invoke(query)
-    if not initial_results:
-        return ([], []) if return_scores else []
-    
-    pairs = [[query, doc.page_content] for doc in initial_results]
-    scores = self.get_cross_encoder().predict(pairs)  # lazy load here
-    
-    scored_docs = sorted(
-        zip(scores, initial_results),
-        key=lambda x: x[0],
-        reverse=True
-    )
-    top_docs = [doc for score, doc in scored_docs[:k_final]]
-    top_scores = [float(score) for score, doc in scored_docs[:k_final]]
-    
-    if return_scores:
-        return top_docs, top_scores
-    return top_docs
+    def two_stage_retrieval(self, query, hybrid_retriever, k_final=5, return_scores=False):
+        initial_results = hybrid_retriever.invoke(query)
+        if not initial_results:
+            return ([], []) if return_scores else []
+        pairs = [[query, doc.page_content] for doc in initial_results]
+        scores = self.get_cross_encoder().predict(pairs)
+        scored_docs = sorted(zip(scores, initial_results), key=lambda x: x[0], reverse=True)
+        top_docs = [doc for score, doc in scored_docs[:k_final]]
+        top_scores = [float(score) for score, doc in scored_docs[:k_final]]
+        if return_scores:
+            return top_docs, top_scores
+        return top_docs
+
     def generate_landmark_query(self, user_query, citing_chunk):
-        """Uses the LLM to rewrite the query contextually for landmark retrieval."""
         prompt = f"""
         The user asked: {user_query}
-
         A citing judgment says: {citing_chunk[:300]}
-
         What legal principle from a 1978 landmark judgment about 
         the definition of 'industry' and employer-employee relationships 
         would be most relevant to this question?
-
         Write one paragraph as if you are summarizing the relevant 
         section of that landmark judgment.
         """
@@ -195,33 +184,23 @@ def two_stage_retrieval(self, query, hybrid_retriever, k_final=5, return_scores=
         citing_results, citing_scores = self.two_stage_retrieval(
             user_query, self.citing_hybrid, k_final=5, return_scores=True
         )
-        
         RELEVANCE_THRESHOLD = 0.3
-    
-        # fallback 1 — citing not relevant enough
         if not citing_results or citing_scores[0] < RELEVANCE_THRESHOLD:
             landmark_results = self.two_stage_retrieval(user_query, self.landmark_hybrid, k_final=5)
             return landmark_results, None
-        
         top_citing = citing_results[0]
         citing_doc_id = top_citing.metadata['parent_id']
         landmark_doc_ids = self.relationship_registry.get(citing_doc_id)
-    
-        # fallback 2 — no registry mapping found
         if not landmark_doc_ids:
             landmark_results = self.two_stage_retrieval(user_query, self.landmark_hybrid, k_final=5)
             return landmark_results, None
-        
         landmark_query = self.generate_landmark_query(user_query, top_citing.page_content)
-        
-        # For Pinecone Hybrid Search, we get relevant parent documents
-        # and then filter them by parent_id. 
         landmark_results = self.two_stage_retrieval(landmark_query, self.landmark_hybrid, k_final=10)
-        filtered_landmark_results = [doc for doc in landmark_results if doc.metadata.get("parent_id") in landmark_doc_ids]
-        
+        filtered_landmark_results = [
+            doc for doc in landmark_results
+            if doc.metadata.get("parent_id") in landmark_doc_ids
+        ]
         return filtered_landmark_results[:5], citing_results
-
-
 # =====================================================================
 # Step 3: Conflict Detector
 # Class responsibility: Use LLMs to read the retrieved chunks and 
@@ -269,116 +248,145 @@ User question: {query}
 # =====================================================================
 class NyayaSetu:
     def __init__(self):
-        # 1. Initialize Embeddings & Pinecone Vector Database
+        # 1. Initialize Embeddings & Pinecone
         self.embeddings = CohereEmbeddings(
-        model="embed-english-v3.0",
-        cohere_api_key=os.getenv("COHERE_API_KEY")
-)
+            model="embed-english-v3.0",
+            cohere_api_key=os.getenv("COHERE_API_KEY")
+        )
+        self._retriever = None
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         index_name = "nyaya-setu"
         index = pc.Index(index_name)
-        
-        # BM25 Encoder for sparse embeddings
-        self.bm25_encoder = BM25Encoder().default()
-        
+
+        # BM25 — lazy loaded on first query
+        self._bm25_encoder = None
+
         self.landmark_docstore = UpstashRedisByteStore(
-            client=redis, 
-            ttl=None, 
+            client=redis,
+            ttl=None,
             namespace="landmark"
         )
-
         self.citing_docstore = UpstashRedisByteStore(
-            client=redis, 
-            ttl=None, 
+            client=redis,
+            ttl=None,
             namespace="citing"
         )
 
-        # 2. Splitters for chunking
+        # 2. Splitters
         child_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=512, chunk_overlap=50, separators=["\n\n", "\n", ". ", " "]
+            chunk_size=512, chunk_overlap=50,
+            separators=["\n\n", "\n", ". ", " "]
         )
 
-        # 3. Initialize PineconeHybridSearchRetrievers
-        self.landmark_hybrid_retriever = PineconeHybridSearchRetriever(
-            embeddings=self.embeddings,
-            sparse_encoder=self.bm25_encoder,
-            index=index,
-            namespace="landmark_judgments",
-            top_k=20
-        )
+        # 3. Hybrid retrievers — initialized with lazy bm25
+        self.index = index  # store for lazy init
+        self._landmark_hybrid_retriever = None
+        self._citing_hybrid_retriever = None
 
-        self.citing_hybrid_retriever = PineconeHybridSearchRetriever(
-            embeddings=self.embeddings,
-            sparse_encoder=self.bm25_encoder,
-            index=index,
-            namespace="citing_judgments",
-            top_k=20
-        )
-        
-        # 4. Initialize ML Models (Cross Encoder & Generative LLM)
-
+        # 4. LLM
         self.llm = ChatGroq(
-            model="llama-3.3-70b-versatile", 
+            model="llama-3.3-70b-versatile",
             temperature=0
         )
-        
-        # 5. Initialize the Sub-Components using Dependency Injection
-        self.ingester = DocumentIngester(
-            self.landmark_hybrid_retriever, 
-            self.citing_hybrid_retriever, 
-            self.landmark_docstore, 
-            self.citing_docstore, 
-            child_splitter
-        )
-        self.retriever = NyayaSetuRetriever(
-            self.landmark_hybrid_retriever, 
-            self.citing_hybrid_retriever,
-            self.llm
-        )
+
+        # 5. Sub-components
+        self.child_splitter = child_splitter
         self.conflict_detector = ConflictDetector(self.llm)
 
+    def get_bm25_encoder(self):
+        if self._bm25_encoder is None:
+            print("Loading BM25 encoder...", flush=True)
+            from pinecone_text.sparse import BM25Encoder
+            self._bm25_encoder = BM25Encoder().default()
+            print("BM25 encoder loaded.", flush=True)
+        return self._bm25_encoder
+
+    def get_landmark_hybrid_retriever(self):
+        if self._landmark_hybrid_retriever is None:
+            self._landmark_hybrid_retriever = PineconeHybridSearchRetriever(
+                embeddings=self.embeddings,
+                sparse_encoder=self.get_bm25_encoder(),
+                index=self.index,
+                namespace="landmark_judgments",
+                top_k=20
+            )
+        return self._landmark_hybrid_retriever
+
+    def get_citing_hybrid_retriever(self):
+        if self._citing_hybrid_retriever is None:
+            self._citing_hybrid_retriever = PineconeHybridSearchRetriever(
+                embeddings=self.embeddings,
+                sparse_encoder=self.get_bm25_encoder(),
+                index=self.index,
+                namespace="citing_judgments",
+                top_k=20
+            )
+        return self._citing_hybrid_retriever
+
+    def get_retriever(self):
+        if self._retriever is None:
+            self._retriever = NyayaSetuRetriever(
+            self.get_landmark_hybrid_retriever(),
+            self.get_citing_hybrid_retriever(),
+            self.llm
+        )
+        return self._retriever
+
+    def get_ingester(self):
+        return DocumentIngester(
+            self.get_landmark_hybrid_retriever(),
+            self.get_citing_hybrid_retriever(),
+            self.landmark_docstore,
+            self.citing_docstore,
+            self.child_splitter
+        )
+
     def ingest(self, pdf_path, doc_type, doc_id, parent_id=None):
-        """Single entry point for ingestion - delegates to DocumentIngester."""
-        return self.ingester.ingest_judgment(pdf_path, doc_type, doc_id, parent_id)
+        """Single entry point for ingestion."""
+        return self.get_ingester().ingest_judgment(
+            pdf_path, doc_type, doc_id, parent_id
+        )
 
     def query(self, user_query):
-    # Step 1: Execute retrieval logic
-        landmark_results, citing_results = self.retriever.nyayasetu_query(user_query)
-    
+        # Step 1: Execute retrieval logic
+        retriever = self.get_retriever()
+        landmark_results, citing_results = retriever.nyayasetu_query(user_query)
+
         l_chunks = landmark_results if landmark_results else []
         c_chunks = citing_results if citing_results else []
-    
-    # Step 2: Detect conflicts and generate natural language answer
-        raw_answer = self.conflict_detector.detect_and_answer(user_query, l_chunks, c_chunks)
-    
-    # Step 3: Collect contexts for RAGAS
+
+        # Step 2: Detect conflicts
+        raw_answer = self.conflict_detector.detect_and_answer(
+            user_query, l_chunks, c_chunks
+        )
+
+        # Step 3: Collect contexts
         contexts = [c.page_content for c in l_chunks + c_chunks]
-    
-    # Step 4: Parse output to extract structured response
+
+        # Step 4: Parse structured response
         landmark_case = l_chunks[0].metadata.get("case_name") if l_chunks else None
         citing_case = c_chunks[0].metadata.get("case_name") if c_chunks else None
-    
+
         conflict_type = None
         conflict_detected = False
-    
-    # Fixed conflict detection — regex instead of simple string search
+
         import re
         match = re.search(
-        r'\*{0,2}(?:Relationship|Classification)\*{0,2}[:\s]+([A-Z]+)',
-        raw_answer
-    )
+            r'\*{0,2}(?:Relationship|Classification)\*{0,2}[:\s]+([A-Z]+)',
+            raw_answer
+        )
         if match:
             conflict_type = match.group(1)
             conflict_detected = conflict_type in ["OVERRULES", "NARROWS"]
-    
+
         return {
-        "answer": raw_answer,
-        "conflict_type": conflict_type,
-        "landmark_case": landmark_case,
-        "citing_case": citing_case,
-        "conflict_detected": conflict_detected,
-        "contexts": contexts
-    }
+            "answer": raw_answer,
+            "conflict_type": conflict_type,
+            "landmark_case": landmark_case,
+            "citing_case": citing_case,
+            "conflict_detected": conflict_detected,
+            "contexts": contexts
+        }
     def debug_query(self, user_query):
         print("\n" + "🔍" + "="*50)
         print(f"DEBUGGING QUERY: {user_query}")
