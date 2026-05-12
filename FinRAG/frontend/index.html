@@ -140,8 +140,7 @@
     const { useState, useRef, useEffect } = React;
 
     /* ── API helper ─────────────────────────────────────── */
-    const API = "http://localhost:8000";
-
+const API = "https://rag-applications.onrender.com";
     async function postQuery(query) {
       const res = await fetch(`${API}/query`, {
         method: "POST",

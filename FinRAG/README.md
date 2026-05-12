@@ -1,3 +1,11 @@
+---
+title: NyayaSetu
+emoji: ⚖️
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
 # ⚖️ FinRAG (NyayaSetu) — Indian Legal Research Engine
 
 **FinRAG (NyayaSetu)** is an AI-powered legal research tool built to detect conflicts between Supreme Court of India judgments. It uses an advanced multi-stage Retrieval-Augmented Generation (RAG) pipeline to analyze landmark and citing judgments, classify their relationships (AFFIRMS / NARROWS / OVERRULES), and present a beautifully structured legal analysis.
