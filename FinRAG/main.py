@@ -501,21 +501,21 @@ class NyayaSetu:
 
     # Example usage
 
-if __name__ == "__main__":
-    nyayasetu = NyayaSetu()
-    # nyayasetu.ingest("Bangalore_water_supply_1978.pdf", "landmark", "Banglore_water_supply_1978")
-    # nyayasetu.ingest("piyara_Singh.pdf", "landmark", "Piarasingh_Vs_State_Of_Punjab")
-    # nyayasetu.ingest("Secretary_State_Of_Karnataka_And_vs_Umadevi.PDF", "citing", "Secretary_State_Of_Karnataka_And_vs_Umadevi")
-    # response = nyayasetu.query("can contract workers claim permanent employment")
-    # print(response)
-    # nyayasetu.debug("can contract workers claim permanent employment")
-    # nyayasetu.debug("can contract workers claim permanent employment")
-    print("Checking system readiness...")
+# if __name__ == "__main__":
+#     nyayasetu = NyayaSetu()
+#     # nyayasetu.ingest("Bangalore_water_supply_1978.pdf", "landmark", "Banglore_water_supply_1978")
+#     # nyayasetu.ingest("piyara_Singh.pdf", "landmark", "Piarasingh_Vs_State_Of_Punjab")
+#     # nyayasetu.ingest("Secretary_State_Of_Karnataka_And_vs_Umadevi.PDF", "citing", "Secretary_State_Of_Karnataka_And_vs_Umadevi")
+#     # response = nyayasetu.query("can contract workers claim permanent employment")
+#     # print(response)
+#     # nyayasetu.debug("can contract workers claim permanent employment")
+#     # nyayasetu.debug("can contract workers claim permanent employment")
+#     print("Checking system readiness...")
     
-    # 2. Run the Debug Query
-    test_query = "Can contract workers claim permanent employment?"
-    # nyayasetu.debug_retrieval(test_query)
-    nyayasetu.debug_query(test_query)
+#     # 2. Run the Debug Query
+#     test_query = "Can contract workers claim permanent employment?"
+#     # nyayasetu.debug_retrieval(test_query)
+#     nyayasetu.debug_query(test_query)
     # # 3. Run the Full Pipeline Query
     # print("\n" + "="*50)
     # print("🚀 RUNNING FULL ANALYSIS")

@@ -39,13 +39,16 @@ nyayasetu_instance: NyayaSetu | None = None
 async def lifespan(app: FastAPI):
     """Initialize the NyayaSetu pipeline once at startup."""
     global nyayasetu_instance
-    print("🔄 Initializing NyayaSetu pipeline …")
-    nyayasetu_instance = NyayaSetu()
-    print("✅ NyayaSetu ready.")
+    try:
+        print("Initializing NyayaSetu...")
+        nyayasetu_instance = NyayaSetu()
+        print("NyayaSetu ready.")
+    except Exception as e:
+        print(f"STARTUP ERROR: {e}")
+        import traceback
+        traceback.print_exc()
     yield
-    print("🛑 Shutting down NyayaSetu.")
     nyayasetu_instance = None
-
 # ── FastAPI app ─────────────────────────────────────────────────────
 app = FastAPI(
     title="NyayaSetu API",
@@ -221,4 +224,4 @@ async def debug_pinecone():
         }
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
-# ── Entry point ─────────────────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────────
