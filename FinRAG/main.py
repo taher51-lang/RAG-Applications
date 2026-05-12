@@ -1,4 +1,7 @@
 import os
+import sys
+print(f"Python: {sys.version}", flush=True)
+print("Starting api.py import...", flush=True)
 import re
 from datetime import datetime
 from dotenv import load_dotenv

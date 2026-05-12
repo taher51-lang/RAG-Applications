@@ -8,8 +8,12 @@ Endpoints:
   POST /ingest  — ingest a new PDF judgment
   GET  /health  — liveness check
 """
+import sys
+print(f"Python: {sys.version}", flush=True)
+print("Starting api.py...", flush=True)
 
 import os
+import shutil
 import traceback
 from contextlib import asynccontextmanager
 
@@ -19,10 +23,21 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-# ── Import NyayaSetu from existing main module ──────────────────────
-from main import NyayaSetu
+print("FastAPI imported OK", flush=True)
 
-# ── Pydantic request/response schemas ──────────────────────────────
+# ── Import NyayaSetu ──────────────────────────────────────────────
+print("Importing NyayaSetu...", flush=True)
+try:
+    from main import NyayaSetu
+    print("NyayaSetu imported OK", flush=True)
+except Exception as e:
+    print(f"IMPORT FAILED: {e}", flush=True)
+    traceback.print_exc()
+    NyayaSetu = None
+
+print("api.py loaded", flush=True)
+
+# ── Pydantic request/response schemas ─────────────────────────────
 class QueryRequest(BaseModel):
     query: str
 
@@ -32,24 +47,26 @@ class IngestRequest(BaseModel):
     doc_id: str
     parent_id: str | None = None
 
-# ── Global singleton ────────────────────────────────────────────────
+# ── Global singleton ───────────────────────────────────────────────
 nyayasetu_instance: NyayaSetu | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the NyayaSetu pipeline once at startup."""
     global nyayasetu_instance
+    print("🔄 Initializing NyayaSetu pipeline …")
     try:
-        print("Initializing NyayaSetu...")
         nyayasetu_instance = NyayaSetu()
-        print("NyayaSetu ready.")
+        print("✅ NyayaSetu ready.")
     except Exception as e:
-        print(f"STARTUP ERROR: {e}")
-        import traceback
+        print(f"❌ NyayaSetu initialization failed: {e}", flush=True)
         traceback.print_exc()
+        nyayasetu_instance = None
     yield
+    print("🛑 Shutting down NyayaSetu.")
     nyayasetu_instance = None
-# ── FastAPI app ─────────────────────────────────────────────────────
+
+# ── FastAPI app ────────────────────────────────────────────────────
 app = FastAPI(
     title="NyayaSetu API",
     description="Indian Legal Research Assistant — conflict detection between Supreme Court judgments",
@@ -57,7 +74,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS — allow all origins ────────────────────────────────────────
+# ── CORS — allow all origins ───────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,7 +83,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routes ──────────────────────────────────────────────────────────
+# ── Routes ─────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
@@ -109,6 +126,7 @@ async def ingest(request: IngestRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
+
 @app.post("/ingest_upload")
 async def ingest_upload(
     file: UploadFile = File(...),
@@ -118,15 +136,14 @@ async def ingest_upload(
 ):
     if not nyayasetu_instance:
         raise HTTPException(status_code=503, detail="NyayaSetu pipeline is not initialized yet.")
-    
+
     upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
     os.makedirs(upload_dir, exist_ok=True)
-    
+
     file_path = os.path.join(upload_dir, file.filename)
     with open(file_path, "wb") as buffer:
-        import shutil
         shutil.copyfileobj(file.file, buffer)
-        
+
     try:
         res_doc_id = nyayasetu_instance.ingest(
             pdf_path=file_path,
@@ -139,13 +156,14 @@ async def ingest_upload(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
+
 @app.get("/documents")
 async def get_documents():
     if not nyayasetu_instance:
         raise HTTPException(status_code=503, detail="NyayaSetu pipeline is not initialized yet.")
-        
+
     documents = []
-    
+
     # Get Landmark documents
     try:
         keys = list(nyayasetu_instance.landmark_docstore.yield_keys())
@@ -163,7 +181,7 @@ async def get_documents():
                     documents.append(doc_item)
     except Exception as e:
         print(f"Error fetching landmark docs: {e}")
-        
+
     # Get Citing documents
     try:
         keys = list(nyayasetu_instance.citing_docstore.yield_keys())
@@ -182,10 +200,11 @@ async def get_documents():
                     documents.append(doc_item)
     except Exception as e:
         print(f"Error fetching citing docs: {e}")
-        
+
     # Filter duplicates by doc_id
     unique_docs = {doc['doc_id']: doc for doc in documents}.values()
     return {"documents": list(unique_docs)}
+
 
 # ── Serve React frontend ───────────────────────────────────────────
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
@@ -197,6 +216,7 @@ if os.path.isdir(FRONTEND_DIR):
     async def serve_frontend():
         return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
+
 @app.get("/debug/pinecone")
 async def debug_pinecone():
     """Directly inspect the Pinecone index stats and namespaces."""
@@ -204,17 +224,11 @@ async def debug_pinecone():
         raise HTTPException(status_code=503, detail="Pipeline not initialized")
 
     try:
-        # Access the underlying index from one of your retrievers
-        # Note: adjust 'landmark_retriever' to whatever your attribute name is in main.py
         index = nyayasetu_instance.landmark_hybrid_retriever.index
-        
-        # 1. Check overall index stats (Total count, namespaces, etc.)
+
         stats = index.describe_index_stats()
-        
-        # 2. Try a manual "dummy" fetch of 1 vector to see metadata structure
-        # We search with a blank vector or just check the namespaces
         namespaces = stats.get('namespaces', {})
-        
+
         return {
             "index_name": "nyayasetu-index",
             "total_vector_count": stats.get('total_vector_count'),
@@ -224,4 +238,3 @@ async def debug_pinecone():
         }
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
-# ── Entry point ───────────────────────────────────────────────────
