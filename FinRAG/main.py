@@ -543,7 +543,6 @@ class NyayaSetu:
 
     # from ragas import evaluate
     # from ragas.metrics import answer_relevancy, context_precision
-    from datasets import Dataset
 
 # RAGAS Embeddings — reuse your existing embeddings
 
