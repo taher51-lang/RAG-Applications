@@ -25,6 +25,6 @@ langchain-core==1.3.0
 langchain-google-genai==4.2.2
 langchain-groq>=0.1.0
 langchain-pinecone>=0.2.0
-
+langchain-cohere
 # Retrieval
 rank-bm25==0.2.2

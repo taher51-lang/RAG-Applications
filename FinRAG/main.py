@@ -9,23 +9,17 @@ from langchain_community.storage import UpstashRedisByteStore
 from upstash_redis import Redis
 # from ragas.llms import LangchainLLMWrapper
 # from ragas.embeddings import LangchainEmbeddingsWrapper
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_voyageai import VoyageAIEmbeddings
+from langchain_cohere import CohereEmbeddings
+
 import os
 
 load_dotenv()
 redis = Redis.from_env()
 import pdfplumber
-from langchain_classic.storage import LocalFileStore
-from langchain_pinecone import PineconeVectorStore
-from langchain_classic.storage._lc_store import create_kv_docstore
 # LangChain Imports
 from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_classic.retrievers import ParentDocumentRetriever, EnsembleRetriever
-from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from langchain_groq import ChatGroq
 
@@ -277,8 +271,10 @@ User question: {query}
 class NyayaSetu:
     def __init__(self):
         # 1. Initialize Embeddings & Pinecone Vector Database
-        self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        
+        self.embeddings = CohereEmbeddings(
+        model="embed-english-v3.0",
+        cohere_api_key=os.getenv("COHERE_API_KEY")
+)
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         index_name = "nyaya-setu"
         index = pc.Index(index_name)
